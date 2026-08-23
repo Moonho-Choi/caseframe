@@ -1023,11 +1023,40 @@
     .sitebar a:hover { text-decoration: underline; }
 
     @media (max-width: 960px) {
-      .workspace { grid-template-columns: minmax(520px, 1fr) 230px; }
+      .workspace { grid-template-columns: 54px minmax(0, 1fr) 230px; }
       .sitebar-privacy { display: none; }
-      .toolrail { display: none; }
       .btn .optional, .history-btn .optional { display: none; }
       .stage-wrap { padding: 14px; }
+    }
+
+    /* 폰: 고정 격자를 풀고 세로로 쌓아 페이지 스크롤로 쓴다.
+       도구 막대는 가로 줄이 되어 시트 위에 남는다. */
+    @media (max-width: 640px) {
+      html, body { height: auto; overflow: auto; }
+      .app { display: block; height: auto; }
+      .topbar { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; }
+      .brand { font-size: 18px; margin-right: 6px; }
+      .workspace { display: block; }
+      .toolrail {
+        display: flex;
+        gap: 4px;
+        padding: 7px 8px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .tool { margin-bottom: 0; }
+      .tool::after { display: none; }
+      .layout-popover, .bg-popover, .guide-popover {
+        top: 52px;
+        left: 8px;
+        width: min(300px, calc(100vw - 16px));
+      }
+      .stage-wrap { padding: 10px; }
+      .inspector { border-left: 0; border-top: 1px solid var(--line); }
+      .filmstrip { grid-template-columns: 1fr; }
+      .film-info { padding: 12px 14px 8px; border-right: 0; }
+      .asset-list { min-height: 86px; }
+      .sitebar { padding: 7px 12px; white-space: normal; text-align: center; }
     }
   </style>
 </head>
