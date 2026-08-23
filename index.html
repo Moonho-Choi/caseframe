@@ -36,7 +36,7 @@
 
     .app {
       display: grid;
-      grid-template-rows: 58px minmax(0, 1fr) 148px 26px;
+      grid-template-rows: 58px minmax(0, 1fr) 116px 26px;
       height: 100%;
     }
 
@@ -977,10 +977,10 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
     }
 
-    .film-info { padding: 16px 18px; border-right: 1px solid var(--line); }
-    .film-info h2 { margin: 0 0 6px; font-size: 14px; }
-    .film-info p { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-    .asset-list { display: flex; gap: 10px; padding: 13px; overflow-x: auto; }
+    .film-info { padding: 11px 16px; border-right: 1px solid var(--line); }
+    .film-info h2 { margin: 0 0 4px; font-size: 13px; }
+    .film-info p { margin: 0 0 7px; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+    .asset-list { display: flex; gap: 9px; padding: 10px; overflow-x: auto; }
 
     /* 윈도우에서 목록 사진 드래그가 텍스트 선택·이미지 기본 드래그와 충돌하지 않게 한다 */
     .asset, .asset span { user-select: none; -webkit-user-select: none; }
@@ -996,7 +996,7 @@
       cursor: grab;
     }
 
-    .asset img { width: 100%; height: 86px; display: block; object-fit: cover; }
+    .asset img { width: 100%; height: 100%; display: block; object-fit: cover; }
     .asset span {
       position: absolute;
       inset: auto 0 0;
@@ -1207,7 +1207,7 @@
       .inspector { border-left: 0; border-top: 1px solid var(--line); }
       .filmstrip { grid-template-columns: 1fr; }
       .film-info { padding: 12px 14px 8px; border-right: 0; }
-      .asset-list { min-height: 86px; }
+      .asset-list { height: 100px; }
       .sitebar { padding: 7px 12px; white-space: normal; text-align: center; }
     }
   </style>
@@ -1502,7 +1502,7 @@
     <section class="filmstrip">
       <div class="film-info">
         <h2>가져온 사진</h2>
-        <p>불러온 사진은 이 목록에 담깁니다. 사진을 클릭하면 선택한 칸에 들어가고, 원하는 칸으로 끌어놓을 수도 있습니다.</p>
+        <p>클릭하면 선택한 칸에 들어가고, 원하는 칸으로 끌어놓을 수도 있습니다.</p>
         <button class="btn" id="openFilesBottom">폴더에서 선택</button>
       </div>
       <div class="asset-list" id="assetList">
