@@ -1462,8 +1462,8 @@
             </div>
           </div>
           <div class="control">
-            <div class="control-title"><span>바깥 여백 (가장자리·칸 사이)</span><span class="value" id="sheetMarginValue">30%</span></div>
-            <input id="sheetMargin" type="range" min="0" max="100" step="5" value="30">
+            <div class="control-title"><span>바깥 여백 (가장자리·칸 사이)</span><span class="value" id="sheetMarginValue">10%</span></div>
+            <input id="sheetMargin" type="range" min="0" max="100" step="5" value="10">
           </div>
         </div>
         <div class="control-section">
@@ -1887,7 +1887,7 @@
     let slotFillPct = 100;    // 사진 여백 농도: 0=흰색, 100=검정 (기본 검정)
     let frameWidthPx = 0;     // 0 = 테두리 없음(기본)
     let frameColorHex = '#000000';
-    let sheetMarginPct = 30;  // 바깥 여백(시트 가장자리·칸 사이): 0=없음 ~ 100=넓게
+    let sheetMarginPct = 10;  // 바깥 여백(시트 가장자리·칸 사이): 0=없음 ~ 100=넓게 (기본 10)
     const FRAME_COLOR_NAMES = { '#ffffff': '흰색', '#cfd5db': '밝은 회색', '#7b858f': '회색', '#3c4753': '진회색', '#000000': '검정' };
 
     function grayFromPct(pct) {
@@ -3287,7 +3287,7 @@
         slotFillPct = savedFrame.fill ?? 100;
         frameWidthPx = savedFrame.width ?? 0;
         frameColorHex = savedFrame.color ?? '#000000';
-        sheetMarginPct = savedFrame.margin ?? 30;
+        sheetMarginPct = savedFrame.margin ?? 10;
       }
     } catch (error) {}
     applyFrameStyle(false);
