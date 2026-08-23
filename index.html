@@ -509,6 +509,8 @@
     .photo-slot[hidden], .text-slot[hidden] { display: none !important; }
     .sheet.generic-layout .photo-slot { grid-column: auto !important; grid-row: auto !important; }
     .sheet.generic-layout .slot-label { display: none; }
+    .slot-label { transition: opacity .2s; }
+    .sheet.labels-off .slot-label { opacity: .22; }
 
     .photo-slot {
       border: 1.5px dashed var(--slot-border);
@@ -1301,6 +1303,11 @@
             <button class="btn" id="fit">원본 맞춤</button>
           </div>
         </div>
+        <div class="control-section">
+          <h3>사진 이름표</h3>
+          <label class="check"><input type="checkbox" id="exportLabels" checked> 이름표(UPPER 등)를 저장 이미지에 포함</label>
+          <p class="control-note">체크를 끄면 화면에서 이름표가 흐려지고, 저장 이미지에서는 빠집니다.</p>
+        </div>
         <div class="control-section photo-controls">
           <h3>사진 보정</h3>
           <div class="control">
@@ -1353,7 +1360,6 @@
               <option value="jpg">JPG (용량 작음)</option>
             </select>
           </div>
-          <label class="check"><input type="checkbox" id="exportLabels" checked> 사진 이름표(UPPER 등) 포함</label>
         </div>
         <div class="control-section">
           <h3>사용 안내</h3>
@@ -1777,6 +1783,14 @@
       if (frameWidthPx === 0) frameWidthPx = 1.5;
       applyFrameStyle();
     });
+
+    // 이름표 포함 체크를 끄면 화면에서도 바로 흐려져 저장 결과를 예고한다.
+    const exportLabelsBox = document.getElementById('exportLabels');
+    function applyLabelDim() {
+      sheet.classList.toggle('labels-off', !exportLabelsBox.checked);
+    }
+    exportLabelsBox.addEventListener('change', applyLabelDim);
+    applyLabelDim();
 
     // ── 배경 지우기 (베타) ──────────────────────────────────
     // 처리 엔진(onnxruntime-web, MIT)과 모델(isnet, Apache-2.0)은 이 사이트에서
