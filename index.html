@@ -46,7 +46,7 @@
       gap: 10px;
       padding: 0 18px;
       border-bottom: 1px solid rgba(255, 255, 255, .07);
-      background: rgba(13, 19, 27, .62);
+      background: rgba(13, 19, 27, .42);
       -webkit-backdrop-filter: blur(24px) saturate(1.4);
       backdrop-filter: blur(24px) saturate(1.4);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
@@ -97,20 +97,41 @@
       gap: 7px;
       min-height: 34px;
       padding: 0 12px;
-      border: 1px solid rgba(255, 255, 255, .1);
-      border-radius: 10px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 2px 8px rgba(0, 0, 0, .25);
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, .09);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015) 50%, rgba(255, 255, 255, .03));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .16), 0 4px 12px rgba(0, 0, 0, .28);
       cursor: pointer;
       transition: border-color .15s, background .15s, transform .15s;
     }
 
-    .btn:hover { border-color: rgba(255, 255, 255, .2); background: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .04)); }
+    /* 물방울 광택 아크 (은은한 버전, 원장 확정) */
+    .btn::before {
+      content: '';
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 6%;
+      height: 36%;
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, 0));
+      pointer-events: none;
+    }
+
+    .btn:hover { border-color: rgba(255, 255, 255, .18); background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .03) 50%, rgba(255, 255, 255, .05)); }
     .btn:active { transform: translateY(1px); }
     .btn svg { width: 14px; height: 14px; flex: 0 0 auto; }
     .btn { white-space: nowrap; }
-    .btn.primary { color: #06211d; border-color: var(--accent); background: var(--accent); font-weight: 750; }
-    .btn.primary:hover { background: #65e2ce; }
+    .btn.primary {
+      color: #06211d;
+      border-color: rgba(255, 255, 255, .25);
+      background: linear-gradient(180deg, #58E0C9, #23A78E 55%, #1E9B84);
+      font-weight: 750;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .35), inset 0 -2px 4px rgba(6, 35, 29, .22), 0 4px 14px rgba(53, 199, 176, .3);
+    }
+    .btn.primary::before { background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0)); }
+    .btn.primary:hover { background: linear-gradient(180deg, #65E6D1, #2AB598 55%, #23A78E); }
     .btn.ghost { background: transparent; }
     .btn.icon { width: 34px; padding: 0; }
     .btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
@@ -119,9 +140,10 @@
       display: flex;
       align-items: stretch;
       min-height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
+      border: 1px solid rgba(255, 255, 255, .09);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015) 50%, rgba(255, 255, 255, .03));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .16);
       overflow: hidden;
     }
 
@@ -221,7 +243,7 @@
       z-index: 12;
       padding: 12px 8px;
       border-right: 1px solid rgba(255, 255, 255, .06);
-      background: rgba(13, 19, 27, .55);
+      background: rgba(13, 19, 27, .38);
       -webkit-backdrop-filter: blur(20px);
       backdrop-filter: blur(20px);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
@@ -232,17 +254,24 @@
       width: 40px;
       height: 40px;
       margin-bottom: 6px;
-      border: 1px solid transparent;
-      border-radius: 11px;
-      color: #8494A4;
-      background: transparent;
+      border: 1px solid rgba(255, 255, 255, .09);
+      border-radius: 12px;
+      color: #AEBCCA;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015) 50%, rgba(255, 255, 255, .03));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .14);
       cursor: pointer;
       display: grid;
       place-items: center;
     }
 
     .tool svg { width: 18px; height: 18px; }
-    .tool.active, .tool:hover { color: var(--accent); border-color: rgba(53,199,176,.35); background: rgba(53,199,176,.12); }
+    .tool:hover { color: var(--accent); border-color: rgba(53, 199, 176, .35); }
+    .tool.active {
+      color: #06231D;
+      border-color: transparent;
+      background: linear-gradient(180deg, #58E0C9, #23A78E);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .4), 0 4px 12px rgba(53, 199, 176, .3);
+    }
 
     .tool::after {
       content: attr(data-label);
@@ -276,7 +305,7 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: rgba(21, 32, 43, .85);
+      background: rgba(21, 32, 43, .72);
       -webkit-backdrop-filter: blur(20px) saturate(1.3);
       backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
@@ -331,7 +360,7 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: rgba(21, 32, 43, .85);
+      background: rgba(21, 32, 43, .72);
       -webkit-backdrop-filter: blur(20px) saturate(1.3);
       backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
@@ -387,7 +416,7 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: rgba(21, 32, 43, .85);
+      background: rgba(21, 32, 43, .72);
       -webkit-backdrop-filter: blur(20px) saturate(1.3);
       backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
@@ -430,10 +459,9 @@
       overflow: auto;
       background-color: #0A0E14;
       background-image:
-        radial-gradient(58% 52% at 50% 46%, rgba(196, 224, 255, .16) 0%, rgba(196, 224, 255, .05) 46%, transparent 72%),
         radial-gradient(#131C28 1px, transparent 1px),
         radial-gradient(90% 80% at 50% 40%, #101923 0%, #0A0E14 100%);
-      background-size: 100% 100%, 20px 20px, 100% 100%;
+      background-size: 20px 20px, 100% 100%;
     }
 
     .sheet {
@@ -450,13 +478,11 @@
       color: var(--sheet-ink);
       background: var(--sheet-bg);
       border-radius: 6px;
-      /* 라이트박스(필름 판독대)처럼 뒤에서 빛이 새어 나오는 시트 (A안 · 은은한 빛) */
+      /* 차분한 그림자 위의 시트 (백라이트 없음, 원장 확정) */
       box-shadow:
-        0 0 0 1px rgba(255,255,255,.45),
+        0 0 0 1px rgba(255,255,255,.12),
         inset 0 2px 0 rgba(255,255,255,.35),
-        0 0 26px rgba(203,228,255,.38),
-        0 0 90px rgba(191,219,255,.22),
-        0 24px 70px rgba(0,0,0,.5);
+        0 24px 60px rgba(0,0,0,.5);
     }
 
     .sheet[data-bg="pure"] {
@@ -876,7 +902,7 @@
       min-height: 0;
       overflow-y: auto;
       border-left: 1px solid rgba(255, 255, 255, .06);
-      background: rgba(13, 19, 27, .55);
+      background: rgba(13, 19, 27, .38);
       -webkit-backdrop-filter: blur(22px) saturate(1.35);
       backdrop-filter: blur(22px) saturate(1.35);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
@@ -939,7 +965,7 @@
       display: grid;
       grid-template-columns: 220px minmax(0, 1fr);
       border-top: 1px solid rgba(255, 255, 255, .07);
-      background: rgba(13, 19, 27, .6);
+      background: rgba(13, 19, 27, .42);
       -webkit-backdrop-filter: blur(22px);
       backdrop-filter: blur(22px);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
@@ -1015,6 +1041,7 @@
 
     /* AI 배경 지우기 버튼 — 로고 배지와 같은 민트 그라데이션 (C안, 원장 확정) */
     .btn-ai {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1023,14 +1050,26 @@
       min-height: 38px;
       margin-top: 4px;
       border: 0;
-      border-radius: 9px;
+      border-radius: 12px;
       background: linear-gradient(135deg, #4ADBC3, #1E9B84);
       color: #06231D;
       font: inherit;
       font-size: 12.5px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 4px 18px rgba(53, 199, 176, .35);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .35), inset 0 -2px 4px rgba(6, 35, 29, .2), 0 4px 16px rgba(53, 199, 176, .3);
+    }
+
+    .btn-ai::before {
+      content: '';
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 7%;
+      height: 38%;
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0));
+      pointer-events: none;
     }
 
     .btn-ai:hover { filter: brightness(1.06); }
