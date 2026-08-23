@@ -982,6 +982,10 @@
     .film-info p { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .asset-list { display: flex; gap: 10px; padding: 13px; overflow-x: auto; }
 
+    /* 윈도우에서 목록 사진 드래그가 텍스트 선택·이미지 기본 드래그와 충돌하지 않게 한다 */
+    .asset, .asset span { user-select: none; -webkit-user-select: none; }
+    .asset img { -webkit-user-drag: none; }
+
     .asset {
       position: relative;
       flex: 0 0 122px;
@@ -1498,7 +1502,7 @@
     <section class="filmstrip">
       <div class="film-info">
         <h2>가져온 사진</h2>
-        <p>여러 장을 불러오면 촬영 순서(정면→우측→좌측→상악→하악)대로 빈 칸에 자동 배치됩니다. 위치를 바꾸려면 여기서 원하는 칸으로 끌어놓으세요.</p>
+        <p>불러온 사진은 이 목록에 담깁니다. 사진을 클릭하면 선택한 칸에 들어가고, 원하는 칸으로 끌어놓을 수도 있습니다.</p>
         <button class="btn" id="openFilesBottom">폴더에서 선택</button>
       </div>
       <div class="asset-list" id="assetList">
@@ -2283,6 +2287,7 @@
         const state = states[slot.dataset.slot];
         if (!state.src) { event.preventDefault(); return; }
         draggedSlotKey = slot.dataset.slot;
+        event.dataTransfer.setData('text/plain', 'swap');
         event.dataTransfer.effectAllowed = 'move';
         // 드래그 중 커서에 사진 축소판이 따라다니게 한다.
         const img = slot.querySelector('img');
@@ -2306,12 +2311,17 @@
         if (event.target.classList.contains('slot-add')) chooseForSlot(slot);
       });
       slot.addEventListener('dblclick', () => chooseForSlot(slot));
-      slot.addEventListener('dragover', event => { event.preventDefault(); slot.classList.add('dragover'); });
+      slot.addEventListener('dragover', event => {
+        event.preventDefault();
+        // 드롭 효과를 명시하지 않으면 윈도우에서 드롭이 거부되는 경우가 있다.
+        event.dataTransfer.dropEffect = draggedSlotKey ? 'move' : 'copy';
+        slot.classList.add('dragover');
+      });
       slot.addEventListener('dragleave', () => slot.classList.remove('dragover'));
       slot.addEventListener('drop', event => {
         event.preventDefault();
         slot.classList.remove('dragover');
-        // 칸끼리 위치 바꾸기 > 여러 장 자동 배치 > 한 장 배치 > 트레이 사진 배치 순으로 처리
+        // 칸끼리 위치 바꾸기 > 파일 배치(여러 장은 목록으로) > 트레이 사진 배치 순으로 처리
         if (draggedSlotKey && draggedSlotKey !== slot.dataset.slot) {
           swapSlots(draggedSlotKey, slot.dataset.slot);
           draggedSlotKey = null;
@@ -2556,15 +2566,14 @@
       input.className = 'slot-input';
       input.addEventListener('change', () => {
         if (!input.files.length) return;
-        // 한 장이면 이 칸에, 여러 장이면 촬영 순서대로 자동 배치
+        // 한 장이면 이 칸에, 여러 장이면 아래 목록에 담는다
         if (input.files.length === 1) loadFileIntoSlot(input.files[0], slot);
         else loadFiles(input.files);
       });
       input.click();
     }
 
-    // 여러 장을 한 번에 불러오면 파일 이름 순서대로 빈 칸에 자동 배치한다.
-    // 이미 사진이 있는 칸은 건너뛰고, 남는 사진은 아래 트레이에 담아 둔다.
+    // 불러온 사진은 아래 트레이(가져온 사진)에만 담는다. 배치는 클릭·드래그로 직접 한다.
     async function loadFiles(files) {
       const imageFiles = [...files]
         .filter(file => file.type.startsWith('image/'))
@@ -2575,33 +2584,9 @@
         const asset = await addAsset(file);
         if (asset) assets.push(asset);
       }
-      autoPlaceAssets(assets);
-    }
-
-    // 원장 촬영 순서: 정면 → 우측 → 좌측 → 상악 → 하악
-    const CROSS_FILL_ORDER = ['front', 'right', 'left', 'upper', 'lower'];
-
-    function autoPlaceAssets(assets) {
-      if (!assets.length) return;
-      const isCross = !sheet.classList.contains('generic-layout');
-      const candidates = isCross
-        ? CROSS_FILL_ORDER.map(key => slots.find(slot => slot.dataset.slot === key)).filter(Boolean)
-        : slots.filter(slot => !slot.hidden);
-      const emptySlots = candidates.filter(slot => !states[slot.dataset.slot].src);
-      if (!emptySlots.length) {
-        showToast('빈 칸이 없어 아래 "가져온 사진" 목록에만 담았습니다. 원하는 칸으로 끌어놓으세요.');
-        return;
+      if (assets.length) {
+        showToast(`사진 ${assets.length}장을 아래 목록에 담았습니다. 클릭하면 선택한 칸에, 끌어놓으면 원하는 칸에 들어갑니다.`);
       }
-      pushHistory();
-      const count = Math.min(assets.length, emptySlots.length);
-      for (let i = 0; i < count; i++) {
-        assignAsset(assets[i], emptySlots[i], false);
-      }
-      const orderName = isCross ? '촬영 순서(정면→우측→좌측→상악→하악)' : '칸 순서';
-      const leftover = assets.length - count;
-      showToast(leftover > 0
-        ? `사진 ${count}장을 ${orderName}대로 배치했습니다. 남은 ${leftover}장은 아래 목록에서 끌어놓으세요.`
-        : `사진 ${count}장을 ${orderName}대로 배치했습니다. 위치가 다르면 아래 목록에서 원하는 칸으로 끌어놓으세요.`);
     }
 
     // 파일을 읽으면서 이 브라우저가 실제로 표시할 수 있는지(HEIC 등 제외) 확인한다.
@@ -2639,7 +2624,13 @@
       asset.querySelector('img').src = assetData.src;
       asset.querySelector('img').alt = file.name;
       asset.querySelector('span').textContent = file.name;
-      asset.addEventListener('dragstart', () => { draggedAsset = assetData; });
+      asset.querySelector('img').draggable = false;
+      asset.addEventListener('dragstart', event => {
+        draggedAsset = assetData;
+        // 윈도우 크롬·엣지, 파이어폭스는 드래그 데이터와 허용 효과가 있어야 드롭을 받아준다.
+        event.dataTransfer.setData('text/plain', assetData.name || 'photo');
+        event.dataTransfer.effectAllowed = 'copy';
+      });
       asset.addEventListener('dragend', () => { draggedAsset = null; });
       asset.addEventListener('click', () => assignAsset(assetData, selectedSlot));
       const list = document.getElementById('assetList');
@@ -2673,21 +2664,12 @@
     }
 
     // 다음에 채울 빈 칸: 십자 배치는 촬영 순서, 격자 배치는 칸 순서를 따른다.
-    function nextEmptySlot() {
-      const isCross = !sheet.classList.contains('generic-layout');
-      const candidates = isCross
-        ? CROSS_FILL_ORDER.map(key => slots.find(item => item.dataset.slot === key)).filter(Boolean)
-        : slots.filter(item => !item.hidden);
-      return candidates.find(item => !states[item.dataset.slot].src) || null;
-    }
-
     function assignAsset(asset, slot, recordHistory = true) {
       if (recordHistory) pushHistory();
       const key = slot.dataset.slot;
       states[key] = { ...states[key], src: asset.src, name: asset.name, zoom: 100, rotate: 0, x: 0, y: 0, flipX: 1, flipY: 1, brightness: 100, contrast: 100 };
       renderSlot(slot);
-      // 배치가 끝나면 선택 커서를 다음 빈 칸으로 옮겨, 연달아 올리면 순서대로 채워진다.
-      selectSlot(nextEmptySlot() || slot);
+      selectSlot(slot);
     }
 
     function renderSlot(slot) {
