@@ -455,7 +455,7 @@
       min-height: 0;
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 12px;
       overflow: auto;
       background-color: #0A0E14;
       background-image:
@@ -472,7 +472,8 @@
       --empty-ink: #536170;
       --slot-border: #cfd5db;
       position: relative;
-      width: min(100%, 1060px);
+      /* 폭은 화면(무대) 높이에 맞춰 계산해, 어두운 빈 공간 없이 최대한 크게 띄운다 */
+      width: min(100%, calc((100vh - 232px) * 1.5));
       aspect-ratio: 3 / 2;
       padding: var(--sheet-pad, 1.2%);
       color: var(--sheet-ink);
@@ -1178,7 +1179,7 @@
       .workspace { grid-template-columns: 54px minmax(0, 1fr) 230px; }
       .privacy-note { display: none; }
       .btn .optional, .history-btn .optional { display: none; }
-      .stage-wrap { padding: 14px; }
+      .stage-wrap { padding: 10px; }
     }
 
     /* 폰: 고정 격자를 풀고 세로로 쌓아 페이지 스크롤로 쓴다.
