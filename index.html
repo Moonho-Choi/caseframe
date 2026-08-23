@@ -8,7 +8,7 @@
   <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="%2335C7B0"/><g fill="%2306231D"><path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/><path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/><path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/><path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/><rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/></g></svg>'>
   <style>
     :root {
-      --bg: #0C1117;
+      --bg: #0A0E14;
       --panel: #121A22;
       --panel-2: #18222C;
       --line: #273240;
@@ -45,8 +45,11 @@
       align-items: center;
       gap: 10px;
       padding: 0 18px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(14, 21, 29, .96);
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
+      background: rgba(13, 19, 27, .62);
+      -webkit-backdrop-filter: blur(24px) saturate(1.4);
+      backdrop-filter: blur(24px) saturate(1.4);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
     }
 
     .brand {
@@ -94,14 +97,15 @@
       gap: 7px;
       min-height: 34px;
       padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 2px 8px rgba(0, 0, 0, .25);
       cursor: pointer;
       transition: border-color .15s, background .15s, transform .15s;
     }
 
-    .btn:hover { border-color: #3c4b5e; background: #1c2936; }
+    .btn:hover { border-color: rgba(255, 255, 255, .2); background: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .04)); }
     .btn:active { transform: translateY(1px); }
     .btn svg { width: 14px; height: 14px; flex: 0 0 auto; }
     .btn { white-space: nowrap; }
@@ -216,8 +220,11 @@
       position: relative;
       z-index: 12;
       padding: 12px 8px;
-      border-right: 1px solid var(--line);
-      background: #0f161f;
+      border-right: 1px solid rgba(255, 255, 255, .06);
+      background: rgba(13, 19, 27, .55);
+      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
     }
 
     .tool {
@@ -269,7 +276,9 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: #15202b;
+      background: rgba(21, 32, 43, .85);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
     }
 
@@ -322,7 +331,9 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: #15202b;
+      background: rgba(21, 32, 43, .85);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
     }
 
@@ -376,7 +387,9 @@
       padding: 12px;
       border: 1px solid #344255;
       border-radius: 11px;
-      background: #15202b;
+      background: rgba(21, 32, 43, .85);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      backdrop-filter: blur(20px) saturate(1.3);
       box-shadow: 0 16px 44px rgba(0,0,0,.42);
     }
 
@@ -415,11 +428,12 @@
       place-items: center;
       padding: 24px;
       overflow: auto;
-      background-color: #0B1016;
+      background-color: #0A0E14;
       background-image:
-        radial-gradient(#1A2634 1px, transparent 1px),
-        radial-gradient(90% 80% at 50% 40%, #101923 0%, #0B1016 100%);
-      background-size: 20px 20px, 100% 100%;
+        radial-gradient(58% 52% at 50% 46%, rgba(196, 224, 255, .16) 0%, rgba(196, 224, 255, .05) 46%, transparent 72%),
+        radial-gradient(#131C28 1px, transparent 1px),
+        radial-gradient(90% 80% at 50% 40%, #101923 0%, #0A0E14 100%);
+      background-size: 100% 100%, 20px 20px, 100% 100%;
     }
 
     .sheet {
@@ -436,12 +450,13 @@
       color: var(--sheet-ink);
       background: var(--sheet-bg);
       border-radius: 6px;
-      /* 라이트박스(필름 판독대)처럼 은은하게 발광하는 시트 */
+      /* 라이트박스(필름 판독대)처럼 뒤에서 빛이 새어 나오는 시트 (A안 · 은은한 빛) */
       box-shadow:
-        0 0 0 1px rgba(255,255,255,.06),
+        0 0 0 1px rgba(255,255,255,.45),
         inset 0 2px 0 rgba(255,255,255,.35),
-        0 30px 70px rgba(0,0,0,.55),
-        0 0 90px rgba(200,225,235,.10);
+        0 0 26px rgba(203,228,255,.38),
+        0 0 90px rgba(191,219,255,.22),
+        0 24px 70px rgba(0,0,0,.5);
     }
 
     .sheet[data-bg="pure"] {
@@ -860,8 +875,11 @@
     .inspector {
       min-height: 0;
       overflow-y: auto;
-      border-left: 1px solid var(--line);
-      background: var(--panel);
+      border-left: 1px solid rgba(255, 255, 255, .06);
+      background: rgba(13, 19, 27, .55);
+      -webkit-backdrop-filter: blur(22px) saturate(1.35);
+      backdrop-filter: blur(22px) saturate(1.35);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
       padding: 0 12px 12px;
     }
 
@@ -874,9 +892,10 @@
     .control-section {
       padding: 13px 14px;
       margin-bottom: 10px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02));
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 13px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 6px 18px rgba(0, 0, 0, .22);
     }
     .text-controls { display: none; }
     .inspector.text-selection .photo-controls { display: none; }
@@ -919,8 +938,11 @@
       min-width: 0;
       display: grid;
       grid-template-columns: 220px minmax(0, 1fr);
-      border-top: 1px solid var(--line);
-      background: #101721;
+      border-top: 1px solid rgba(255, 255, 255, .07);
+      background: rgba(13, 19, 27, .6);
+      -webkit-backdrop-filter: blur(22px);
+      backdrop-filter: blur(22px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
     }
 
     .film-info { padding: 16px 18px; border-right: 1px solid var(--line); }
