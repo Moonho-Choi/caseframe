@@ -922,36 +922,13 @@
     .inspector-head h2 { margin: 0 0 4px; font-size: 15px; }
     .inspector-head p { margin: 0; color: var(--muted); font-size: 11px; }
     .control-section {
-      padding: 0 14px 13px;
+      padding: 13px 14px;
       margin-bottom: 10px;
-      overflow: hidden;
       background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02));
       border: 1px solid rgba(255, 255, 255, .08);
       border-radius: 13px;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 6px 18px rgba(0, 0, 0, .22);
     }
-
-    /* 카드 머리색 밴드(E안, 원장 확정) — 기능별 색으로 한눈에 구분한다 */
-    .sec-ic {
-      width: 20px;
-      height: 20px;
-      border-radius: 6px;
-      display: grid;
-      place-items: center;
-      flex: 0 0 auto;
-      background: var(--tone-ic, #5b6b7a);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
-    }
-
-    .sec-ic svg { width: 12px; height: 12px; stroke: #fff; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-
-    .tone-move { --tone-bg: rgba(53, 199, 176, .2); --tone-line: rgba(53, 199, 176, .28); --tone-title: #9FE8DC; --tone-ic: #2BAE9A; }
-    .tone-label { --tone-bg: rgba(95, 168, 236, .2); --tone-line: rgba(95, 168, 236, .28); --tone-title: #B4D4F5; --tone-ic: #4C93D8; }
-    .tone-adjust { --tone-bg: rgba(232, 180, 76, .18); --tone-line: rgba(232, 180, 76, .26); --tone-title: #F0D49A; --tone-ic: #D0A03E; }
-    .tone-frame { --tone-bg: rgba(176, 140, 232, .2); --tone-line: rgba(176, 140, 232, .28); --tone-title: #D4C2F2; --tone-ic: #9C77D6; }
-    .tone-save { --tone-bg: rgba(143, 163, 184, .18); --tone-line: rgba(143, 163, 184, .26); --tone-title: #C2CFDB; --tone-ic: #7E93A8; }
-    .tone-text { --tone-bg: rgba(224, 140, 166, .18); --tone-line: rgba(224, 140, 166, .26); --tone-title: #F0BCCB; --tone-ic: #C97690; }
-    .tone-logo { --tone-bg: rgba(224, 154, 92, .18); --tone-line: rgba(224, 154, 92, .26); --tone-title: #F0C6A0; --tone-ic: #C9854A; }
     .text-controls { display: none; }
     .inspector.text-selection .photo-controls { display: none; }
     .inspector.text-selection .text-controls { display: block; }
@@ -960,19 +937,7 @@
     .inspector.logo-selection .photo-controls { display: none; }
     .inspector.logo-selection .logo-controls { display: block; }
     .text-controls .danger, .logo-controls .danger { width: 100%; margin-top: 4px; color: #ffd5dc; border-color: #583241; background: #2b1820; }
-    .control-section h3 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 -14px 14px;
-      padding: 9px 14px 8px;
-      background: linear-gradient(90deg, var(--tone-bg, rgba(255, 255, 255, .05)), transparent 78%);
-      border-bottom: 1px solid var(--tone-line, rgba(255, 255, 255, .08));
-      color: var(--tone-title, #b9c5d2);
-      font-size: 11px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
+    .control-section h3 { margin: 0 0 14px; color: #b9c5d2; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 
     .control { margin-bottom: 16px; }
     .control:last-child { margin-bottom: 0; }
@@ -1404,8 +1369,8 @@
           <h2>사진 미세 조정</h2>
           <p id="selectedName">구강 정면 선택됨</p>
         </div>
-        <div class="control-section text-controls tone-text">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 8 5 5 19 5 19 8"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9.5" y1="19" x2="14.5" y2="19"/></svg></span>글상자 스타일</h3>
+        <div class="control-section text-controls">
+          <h3>글상자 스타일</h3>
           <div class="control">
             <div class="control-title"><span>글자 크기</span><span class="value" id="fontSizeValue">18px</span></div>
             <input id="fontSize" type="range" min="8" max="60" value="18">
@@ -1424,8 +1389,8 @@
           </div>
           <button class="btn danger free-text-only" id="deleteTextBox">선택 글상자 삭제</button>
         </div>
-        <div class="control-section logo-controls tone-logo">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8.5" width="14" height="12" rx="1.5"/><path d="M12 3.5v3"/><path d="M10.3 5h3.4"/></svg></span>로고 스타일</h3>
+        <div class="control-section logo-controls">
+          <h3>로고 스타일</h3>
           <div class="control">
             <div class="control-title"><span>투명도</span><span class="value" id="logoOpacityValue">100%</span></div>
             <input id="logoOpacity" type="range" min="10" max="100" value="100">
@@ -1436,8 +1401,8 @@
           </div>
           <button class="btn danger" id="deleteLogo">로고 삭제</button>
         </div>
-        <div class="control-section photo-controls tone-move">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/><path d="m12 4-2.4 2.4M12 4l2.4 2.4M12 20l-2.4-2.4M12 20l2.4-2.4M4 12l2.4-2.4M4 12l2.4 2.4M20 12l-2.4-2.4M20 12l-2.4 2.4"/></svg></span>위치와 크기</h3>
+        <div class="control-section photo-controls">
+          <h3>위치와 크기</h3>
           <div class="control">
             <div class="control-title"><span>확대 / 축소</span><span class="value" id="zoomValue">100%</span></div>
             <input id="zoom" type="range" min="50" max="300" value="100">
@@ -1452,13 +1417,13 @@
             <button class="btn" id="fit">원본 맞춤</button>
           </div>
         </div>
-        <div class="control-section tone-label">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12.5 12.5 20 4 11.5V4h7.5L20 12.5z"/><path d="M8 8h.01"/></svg></span>사진 이름표</h3>
+        <div class="control-section">
+          <h3>사진 이름표</h3>
           <label class="check"><input type="checkbox" id="exportLabels" checked> 이름표(UPPER 등)를 저장 이미지에 포함</label>
           <p class="control-note">체크를 끄면 화면에서 이름표가 흐려지고, 저장 이미지에서는 빠집니다.</p>
         </div>
-        <div class="control-section photo-controls tone-adjust">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M18 6l-1.4 1.4M7.4 16.6 6 18"/></svg></span>사진 보정</h3>
+        <div class="control-section photo-controls">
+          <h3>사진 보정</h3>
           <div class="control">
             <div class="control-title"><span>밝기</span><span class="value" id="brightnessValue">100</span></div>
             <input id="brightness" type="range" min="50" max="150" value="100">
@@ -1470,8 +1435,8 @@
           <button class="btn-ai" id="bgRemove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4V2m0 20v-2m7-9h-2M4 11H2m17.07-6.07-1.41 1.41M6.34 17.66l-1.41 1.41m14.14 0-1.41-1.41M6.34 6.34 4.93 4.93"/><path d="m11 8 8.5 8.5a1.4 1.4 0 0 1-2 2L9 10z"/></svg><span id="bgRemoveLabel">AI 배경 지우기</span><span class="beta-tag">베타</span></button>
           <p class="control-note">첫 사용 때 처리 모듈(약 55MB)을 한 번 내려받습니다. 사진은 인터넷에 올라가지 않습니다. 지운 자리는 아래 "사진 여백" 색으로 채워집니다.</p>
         </div>
-        <div class="control-section tone-frame">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg></span>프레임</h3>
+        <div class="control-section">
+          <h3>프레임</h3>
           <div class="control">
             <div class="control-title"><span>사진 여백 (흰색↔검정)</span><span class="value" id="slotFillValue">검정</span></div>
             <input id="slotFill" type="range" min="0" max="100" value="100">
@@ -1492,8 +1457,8 @@
             </div>
           </div>
         </div>
-        <div class="control-section tone-save">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5M12 15V4"/></svg></span>저장 설정</h3>
+        <div class="control-section">
+          <h3>저장 설정</h3>
           <div class="control">
             <div class="control-title"><span>저장 크기</span></div>
             <select id="exportSize" class="select">
@@ -1510,8 +1475,8 @@
             </select>
           </div>
         </div>
-        <div class="control-section tone-save">
-          <h3><span class="sec-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.3a2.4 2.4 0 1 1 3.3 2.2c-.7.3-.9.9-.9 1.6"/><path d="M12 16.5h.01"/></svg></span>사용 안내</h3>
+        <div class="control-section">
+          <h3>사용 안내</h3>
           <div class="hint">
             사진 위를 드래그해 위치를 조정하세요.<br>
             마우스 휠로 확대·축소, Shift+휠은 미세 조정입니다.<br>
