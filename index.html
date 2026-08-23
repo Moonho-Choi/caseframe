@@ -525,7 +525,12 @@
       touch-action: none;
     }
 
-    .photo-slot.has-image { border-style: solid; border-color: #7b858f; }
+    .photo-slot.has-image {
+      border-style: solid;
+      border-color: #7b858f;
+      border-width: var(--frame-w, 1.5px);
+      background: var(--slot-fill, var(--empty-bg));
+    }
 
     .photo-slot:active { cursor: grabbing; }
     .photo-slot.selected { outline: 3px solid var(--accent); outline-offset: 2px; z-index: 2; }
@@ -1229,6 +1234,18 @@
           </div>
         </div>
         <div class="control-section">
+          <h3>프레임</h3>
+          <div class="control">
+            <div class="control-title"><span>사진 여백 (흰색↔검정)</span><span class="value" id="slotFillValue">자동</span></div>
+            <input id="slotFill" type="range" min="0" max="100" value="8">
+            <button class="btn" id="slotFillAuto">자동 (배경에 맞춤)</button>
+          </div>
+          <div class="control">
+            <div class="control-title"><span>테두리 두께</span><span class="value" id="frameWidthValue">1.5px</span></div>
+            <input id="frameWidth" type="range" min="0" max="8" step="0.5" value="1.5">
+          </div>
+        </div>
+        <div class="control-section">
           <h3>저장 설정</h3>
           <div class="control">
             <div class="control-title"><span>저장 크기</span></div>
@@ -1610,6 +1627,46 @@
 
     // ---- 병원 로고: 한 번 넣으면 이 컴퓨터에 기억되어 다음에도 같은 위치에 나타난다 ----
     const LOGO_STORAGE_KEY = 'caseframe-logo';
+    const FRAME_STORAGE_KEY = 'caseframe-frame';
+    let slotFillPct = null;   // null = 자동(배경 테마 색)
+    let frameWidthPx = 1.5;
+
+    function grayFromPct(pct) {
+      const v = Math.round(255 * (1 - pct / 100));
+      return `rgb(${v}, ${v}, ${v})`;
+    }
+
+    function applyFrameStyle(save = true) {
+      const fillValue = document.getElementById('slotFillValue');
+      const widthValue = document.getElementById('frameWidthValue');
+      if (slotFillPct === null) {
+        sheet.style.removeProperty('--slot-fill');
+        fillValue.textContent = '자동';
+      } else {
+        sheet.style.setProperty('--slot-fill', grayFromPct(slotFillPct));
+        fillValue.textContent = slotFillPct === 0 ? '흰색' : slotFillPct === 100 ? '검정' : slotFillPct + '%';
+        document.getElementById('slotFill').value = slotFillPct;
+      }
+      sheet.style.setProperty('--frame-w', frameWidthPx + 'px');
+      widthValue.textContent = frameWidthPx === 0 ? '없음' : frameWidthPx + 'px';
+      document.getElementById('frameWidth').value = frameWidthPx;
+      if (save) {
+        try { localStorage.setItem(FRAME_STORAGE_KEY, JSON.stringify({ fill: slotFillPct, width: frameWidthPx })); } catch (error) {}
+      }
+    }
+
+    document.getElementById('slotFill').addEventListener('input', event => {
+      slotFillPct = Number(event.target.value);
+      applyFrameStyle();
+    });
+    document.getElementById('slotFillAuto').addEventListener('click', () => {
+      slotFillPct = null;
+      applyFrameStyle();
+    });
+    document.getElementById('frameWidth').addEventListener('input', event => {
+      frameWidthPx = Number(event.target.value);
+      applyFrameStyle();
+    });
     // 이름 변경 전(orthoframe-logo)에 저장해 둔 로고가 있으면 한 번 옮겨 온다.
     try {
       if (!localStorage.getItem(LOGO_STORAGE_KEY) && localStorage.getItem('orthoframe-logo')) {
@@ -2498,7 +2555,7 @@
       ctx.save();
       roundedRectPath(ctx, cell.x, cell.y, cell.w, cell.h, 8 * scale);
       ctx.clip();
-      ctx.fillStyle = theme.empty;
+      ctx.fillStyle = slotFillPct === null ? theme.empty : grayFromPct(slotFillPct);
       ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
       const img = new Image();
       img.src = state.src;
@@ -2525,12 +2582,14 @@
       ctx.drawImage(source, -dw / 2, -dh / 2, dw, dh);
       if (canvasFilterSupported) ctx.filter = 'none';
       ctx.restore();
-      ctx.save();
-      ctx.strokeStyle = '#7b858f';
-      ctx.lineWidth = 1.5 * scale;
-      roundedRectPath(ctx, cell.x + ctx.lineWidth / 2, cell.y + ctx.lineWidth / 2, cell.w - ctx.lineWidth, cell.h - ctx.lineWidth, 8 * scale);
-      ctx.stroke();
-      ctx.restore();
+      if (frameWidthPx > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#7b858f';
+        ctx.lineWidth = frameWidthPx * scale;
+        roundedRectPath(ctx, cell.x + ctx.lineWidth / 2, cell.y + ctx.lineWidth / 2, cell.w - ctx.lineWidth, cell.h - ctx.lineWidth, 8 * scale);
+        ctx.stroke();
+        ctx.restore();
+      }
       if (label) drawPhotoLabel(ctx, slot, label, scale);
     }
 
@@ -2830,6 +2889,16 @@
       const savedLogo = JSON.parse(localStorage.getItem(LOGO_STORAGE_KEY) || 'null');
       if (savedLogo && savedLogo.src) createLogoBox(savedLogo);
     } catch (error) {}
+
+    // 저장해 둔 프레임 설정(여백 농도·테두리 두께) 복원
+    try {
+      const savedFrame = JSON.parse(localStorage.getItem(FRAME_STORAGE_KEY) || 'null');
+      if (savedFrame) {
+        slotFillPct = savedFrame.fill ?? null;
+        frameWidthPx = savedFrame.width ?? 1.5;
+      }
+    } catch (error) {}
+    applyFrameStyle(false);
   </script>
 </body>
 </html>
