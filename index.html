@@ -1789,7 +1789,8 @@
         const script = document.createElement('script');
         script.src = 'vendor/ort.min.js';
         script.onload = () => {
-          window.ort.env.wasm.wasmPaths = 'vendor/';
+          // 상대 경로는 브라우저에 따라 모듈 해석에 실패하므로 절대 주소로 지정한다.
+          window.ort.env.wasm.wasmPaths = new URL('vendor/', location.href).href;
           resolve(window.ort);
         };
         script.onerror = () => reject(new Error('처리 엔진을 불러오지 못했습니다 (인터넷 연결 확인)'));
