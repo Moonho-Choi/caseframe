@@ -749,6 +749,10 @@
     }
 
     .text-slot .editable:empty::before { content: attr(data-placeholder); color: rgba(17,20,24,.45); }
+    /* 모서리 칸 제목도 직접 고치거나 지울 수 있다. 지우면 저장 이미지에서도 빠진다. */
+    .text-slot-title[contenteditable] { cursor: text; outline: none; }
+    .text-slot-title:empty::before { content: attr(data-placeholder); color: rgba(123, 135, 146, .4); }
+    .text-slot-title:focus { color: #28323c; }
     .text-slot .editable:focus {
       background: rgba(77,214,191,.08);
     }
@@ -1290,7 +1294,7 @@
         <div class="sheet" id="sheet" data-bg="pure" data-layout="cross">
           <div class="sheet-grid">
             <section class="text-slot meta">
-              <div class="text-slot-title">PATIENT / 환자 정보</div>
+              <div class="text-slot-title" contenteditable="true" spellcheck="false" data-placeholder="제목">PATIENT / 환자 정보</div>
               <div class="editable" contenteditable="true" spellcheck="false" data-placeholder="텍스트를 입력하세요"></div>
             </section>
 
@@ -1302,7 +1306,7 @@
             </div>
 
             <section class="text-slot diagnosis">
-              <div class="text-slot-title">DIAGNOSIS / 진단</div>
+              <div class="text-slot-title" contenteditable="true" spellcheck="false" data-placeholder="제목">DIAGNOSIS / 진단</div>
               <div class="editable" contenteditable="true" spellcheck="false" data-placeholder="텍스트를 입력하세요"></div>
             </section>
 
@@ -1328,7 +1332,7 @@
             </div>
 
             <section class="text-slot memo">
-              <div class="text-slot-title">MEMO / 메모</div>
+              <div class="text-slot-title" contenteditable="true" spellcheck="false" data-placeholder="제목">MEMO / 메모</div>
               <div class="editable" contenteditable="true" spellcheck="false" data-placeholder="텍스트를 입력하세요"></div>
             </section>
 
@@ -1340,7 +1344,7 @@
             </div>
 
             <section class="text-slot status">
-              <div class="text-slot-title">RECORD / 촬영 기록</div>
+              <div class="text-slot-title" contenteditable="true" spellcheck="false" data-placeholder="제목">RECORD / 촬영 기록</div>
               <div class="editable" contenteditable="true" spellcheck="false" data-placeholder="텍스트를 입력하세요"></div>
             </section>
 
@@ -1754,6 +1758,16 @@
       event.preventDefault();
       const text = event.clipboardData.getData('text/plain');
       if (text) document.execCommand('insertText', false, text);
+    });
+
+    // 모서리 칸 제목은 한 줄로 유지한다 (Enter를 누르면 편집이 끝난다)
+    document.querySelectorAll('.text-slot-title').forEach(title => {
+      title.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          title.blur();
+        }
+      });
     });
 
     function toggleLayoutPopover() {
