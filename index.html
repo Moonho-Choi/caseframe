@@ -550,6 +550,7 @@
     .photo-slot[hidden], .text-slot[hidden] { display: none !important; }
     .sheet.generic-layout .photo-slot { grid-column: auto !important; grid-row: auto !important; }
     .sheet.generic-layout .slot-label { display: none; }
+    .sheet.generic-layout.labeled-layout .slot-label { display: block; }
     .slot-label { transition: opacity .2s; }
     .sheet.labels-off .slot-label { opacity: .22; }
 
@@ -1032,6 +1033,20 @@
 
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+    /* 상단 개인정보 안내: 강조하지 않는 조용한 표시 */
+    .privacy-note {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-right: 8px;
+      color: #6d7d8e;
+      font-size: 11px;
+      letter-spacing: .01em;
+      white-space: nowrap;
+    }
+
+    .privacy-note svg { width: 12px; height: 12px; flex: 0 0 auto; opacity: .85; }
+
     .control-note {
       margin: 8px 0 0;
       color: var(--muted);
@@ -1152,7 +1167,7 @@
 
     @media (max-width: 960px) {
       .workspace { grid-template-columns: 54px minmax(0, 1fr) 230px; }
-      .sitebar-privacy { display: none; }
+      .privacy-note { display: none; }
       .btn .optional, .history-btn .optional { display: none; }
       .stage-wrap { padding: 14px; }
     }
@@ -1223,6 +1238,7 @@
         </div>
       </div>
       <div class="spacer"></div>
+      <div class="privacy-note" title="사진은 서버로 전송되지 않고 이 컴퓨터 안에서만 처리됩니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 컴퓨터 안에서만 처리</span></div>
       <button class="btn" id="previewImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg> <span class="optional">미리보기</span></button>
       <button class="btn" id="copyImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span class="optional">클립보드 복사</span></button>
       <button class="btn primary" id="savePng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 이미지 저장</button>
@@ -1482,8 +1498,7 @@
     </section>
 
     <footer class="sitebar">
-      <span class="sitebar-privacy">사진은 서버로 전송되지 않고 이 컴퓨터 안에서만 처리됩니다 &middot;</span>
-      <span>제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a></span>
+      <span>제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a> &middot; <a href="mailto:eumtmj@gmail.com">eumtmj@gmail.com</a></span>
     </footer>
   </main>
 
@@ -1597,6 +1612,25 @@
       left: 'LEFT',
       lower: 'LOWER OCCLUSAL'
     };
+
+    // 배치별 이름표: 위아래·좌우 = 전후 비교, 가로 3장 = 안모 방향(환자 기준)
+    const layoutLabels = {
+      vertical2: ['BEFORE', 'AFTER'],
+      horizontal2: ['BEFORE', 'AFTER'],
+      horizontal3: ['RIGHT', 'CENTER', 'LEFT']
+    };
+
+    function updateSlotLabels() {
+      const texts = layoutLabels[currentLayout];
+      sheet.classList.toggle('labeled-layout', Boolean(texts));
+      const visible = slots.filter(slot => !slot.hidden);
+      slots.forEach(slot => {
+        const el = slot.querySelector('.slot-label');
+        if (!el) return;
+        if (currentLayout === 'cross') el.textContent = photoLabels[slot.dataset.slot] || '';
+        else if (texts) el.textContent = texts[visible.indexOf(slot)] || '';
+      });
+    }
 
     // 빈 칸에 표시하는 배치 안내 스케치. 사진을 넣으면 사라지고 저장 이미지에는 포함되지 않는다.
     // 원장 확정(5차) 그록 생성 일러스트 — 원본: ~/문서/이음자료창고/08_생성이미지/2026-08-23 OrthoFrame 배치 스케치/최종2/
@@ -1793,6 +1827,7 @@
         slots.forEach((slot, index) => { slot.hidden = index >= config.count; });
       }
 
+      updateSlotLabels();
       if (changed) slots.forEach(renderSlot);
       updateSketches();
       if (selectedSlot.hidden) selectSlot(slots.find(slot => !slot.hidden));
@@ -2827,7 +2862,9 @@
 
       for (const slot of slots) {
         if (slot.hidden) continue;
-        const label = isCross && options.includeLabels ? photoLabels[slot.dataset.slot] || '' : '';
+        const labelEl = slot.querySelector('.slot-label');
+        const labelShown = isCross || layoutLabels[currentLayout];
+        const label = labelShown && options.includeLabels && labelEl ? labelEl.textContent : '';
         await drawPhoto(ctx, states[slot.dataset.slot], slot, rectOf(slot), scale, theme, label);
       }
 
