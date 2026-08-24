@@ -711,6 +711,16 @@
     .photo-slot.has-image .slot-flip { display: grid; place-items: center; }
     .slot-flip:hover { background: rgba(53, 199, 176, .92); color: #06231D; border-color: transparent; }
 
+    /* 반전이 적용된 상태: 버튼이 민트로 켜져 "반전됨"을 표시한다 */
+    .slot-flip.on {
+      background: linear-gradient(180deg, #58E0C9, #23A78E);
+      color: #06231D;
+      border-color: transparent;
+      box-shadow: 0 2px 9px rgba(53, 199, 176, .45);
+    }
+
+    .btn.on { border-color: rgba(53, 199, 176, .6); color: var(--accent); background: rgba(53, 199, 176, .12); }
+
     .slot-move {
       position: absolute;
       top: 7px;
@@ -2344,6 +2354,7 @@
           pushHistory();
           states[slot.dataset.slot][axis] *= -1;
           renderSlot(slot);
+          syncControls();
         });
         slot.appendChild(btn);
       };
@@ -2728,6 +2739,17 @@
       img.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.zoom / 100 * state.flipX}, ${state.zoom / 100 * state.flipY}) rotate(${state.rotate}deg)`;
       img.style.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%)`;
       slot.classList.toggle('has-image', Boolean(state.src));
+      // 반전된 사진은 버튼이 켜진 상태로 보여, 원본인지 반전본인지 바로 알 수 있다
+      const flipXBtn = slot.querySelector('.slot-flip.flip-x');
+      const flipYBtn = slot.querySelector('.slot-flip.flip-y');
+      if (flipXBtn) {
+        flipXBtn.classList.toggle('on', state.flipX === -1);
+        flipXBtn.title = state.flipX === -1 ? '좌우 반전됨 — 누르면 원본으로' : '좌우 반전 (미러 촬영 보정)';
+      }
+      if (flipYBtn) {
+        flipYBtn.classList.toggle('on', state.flipY === -1);
+        flipYBtn.title = state.flipY === -1 ? '상하 반전됨 — 누르면 원본으로' : '상하 반전 (미러 촬영 보정)';
+      }
     }
 
     function enablePan(slot) {
@@ -2828,10 +2850,13 @@
         document.getElementById(inputId).value = state[key];
         document.getElementById(outputId).textContent = format(state[key]);
       });
+      // 패널 좌우/상하 버튼에도 반전 여부를 표시한다
+      document.getElementById('flipX').classList.toggle('on', state.flipX === -1);
+      document.getElementById('flipY').classList.toggle('on', state.flipY === -1);
     }
 
-    document.getElementById('flipX').addEventListener('click', () => { pushHistory(); currentState().flipX *= -1; renderSlot(selectedSlot); });
-    document.getElementById('flipY').addEventListener('click', () => { pushHistory(); currentState().flipY *= -1; renderSlot(selectedSlot); });
+    document.getElementById('flipX').addEventListener('click', () => { pushHistory(); currentState().flipX *= -1; renderSlot(selectedSlot); syncControls(); });
+    document.getElementById('flipY').addEventListener('click', () => { pushHistory(); currentState().flipY *= -1; renderSlot(selectedSlot); syncControls(); });
     document.getElementById('fit').addEventListener('click', () => {
       pushHistory();
       Object.assign(currentState(), { zoom: 100, rotate: 0, x: 0, y: 0, flipX: 1, flipY: 1 });
