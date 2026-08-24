@@ -2354,7 +2354,11 @@
         selectSlot(slot);
         if (event.target.classList.contains('slot-add')) chooseForSlot(slot);
       });
-      slot.addEventListener('dblclick', () => chooseForSlot(slot));
+      slot.addEventListener('dblclick', event => {
+        // 반전·빼기 등 버튼을 빠르게 연타할 때 파일 선택창이 뜨지 않게 한다
+        if (event.target.closest('button')) return;
+        chooseForSlot(slot);
+      });
       slot.addEventListener('dragover', event => {
         event.preventDefault();
         // 드롭 효과를 명시하지 않으면 윈도우에서 드롭이 거부되는 경우가 있다.
