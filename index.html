@@ -688,6 +688,29 @@
     .photo-slot.has-image .slot-remove { display: grid; place-items: center; }
     .slot-remove:hover { background: #a33d49; }
 
+    /* 미러 촬영 보정용 반전 버튼 — 사진이 든 칸 왼쪽 아래에 항상 표시한다 */
+    .slot-flip {
+      position: absolute;
+      z-index: 6;
+      bottom: 8px;
+      display: none;
+      width: 27px;
+      height: 27px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, .6);
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(40, 46, 53, .82);
+      box-shadow: 0 2px 7px rgba(0, 0, 0, .2);
+      cursor: pointer;
+    }
+
+    .slot-flip svg { width: 15px; height: 15px; }
+    .slot-flip.flip-x { left: 8px; }
+    .slot-flip.flip-y { left: 41px; }
+    .photo-slot.has-image .slot-flip { display: grid; place-items: center; }
+    .slot-flip:hover { background: rgba(53, 199, 176, .92); color: #06231D; border-color: transparent; }
+
     .slot-move {
       position: absolute;
       top: 7px;
@@ -2307,6 +2330,25 @@
       });
       moveHandle.addEventListener('dragend', () => { draggedSlotKey = null; });
       slot.appendChild(moveHandle);
+
+      // 미러 촬영 보정용 반전 버튼 — 패널까지 가지 않고 사진 위에서 바로 누른다
+      const makeFlipButton = (cls, title, axis, iconPath) => {
+        const btn = document.createElement('button');
+        btn.className = 'slot-flip ' + cls;
+        btn.title = title + ' (미러 촬영 보정)';
+        btn.setAttribute('aria-label', `${slotDisplayName(slot)} ${title}`);
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + iconPath + '</svg>';
+        btn.addEventListener('click', event => {
+          event.stopPropagation();
+          selectSlot(slot);
+          pushHistory();
+          states[slot.dataset.slot][axis] *= -1;
+          renderSlot(slot);
+        });
+        slot.appendChild(btn);
+      };
+      makeFlipButton('flip-x', '좌우 반전', 'flipX', '<path d="M12 4v16"/><path d="M8 8 4 12l4 4"/><path d="m16 8 4 4-4 4"/>');
+      makeFlipButton('flip-y', '상하 반전', 'flipY', '<path d="M4 12h16"/><path d="M8 8l4-4 4 4"/><path d="m8 16 4 4 4-4"/>');
 
       slot.addEventListener('click', event => {
         selectSlot(slot);
