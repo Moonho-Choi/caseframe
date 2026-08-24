@@ -795,7 +795,8 @@
       text-align: left;
     }
 
-    .text-slot .editable:empty::before { content: attr(data-placeholder); color: rgba(17,20,24,.45); }
+    /* 안내 문구는 한 줄로 제한 — 모바일의 좁은 칸에서 두 줄로 접혀 아랫줄이 잘리는 것 방지 */
+    .text-slot .editable:empty::before { content: attr(data-placeholder); color: rgba(17,20,24,.45); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* 모서리 칸 제목도 직접 고치거나 지울 수 있다. 지우면 저장 이미지에서도 빠진다. */
     .text-slot-title[contenteditable] { cursor: text; outline: none; }
     .text-slot-title:empty::before { content: attr(data-placeholder); color: rgba(123, 135, 146, .4); }
