@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="치과 케이스 사진을 십자·격자 배치로 정렬하고 PNG로 저장하는 무료 웹 도구. 사진은 서버로 전송되지 않고 브라우저 안에서만 처리됩니다.">
+  <meta name="description" content="치과 케이스 사진 정리, 1분이면 끝. 구강 사진·교정 전후 사진·모델 사진을 십자·격자로 배열하고 PNG로 저장하는 무료 웹 도구. 설치 없이 브라우저에서 쓰고, 사진은 서버로 전송되지 않습니다.">
   <title>CaseFrame — 치과 케이스 사진 배열 도구</title>
   <link rel="canonical" href="https://caseframe.kr/">
   <meta property="og:type" content="website">
@@ -18,6 +18,22 @@
   <meta name="twitter:title" content="CaseFrame — 치과 케이스 사진 배열 도구">
   <meta name="twitter:description" content="케이스 사진 정리, 이제 1분이면 끝납니다. 간편한 무료 도구. 사진은 서버로 전송되지 않습니다.">
   <meta name="twitter:image" content="https://caseframe.kr/og-image.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "CaseFrame",
+    "alternateName": "케이스프레임",
+    "url": "https://caseframe.kr/",
+    "description": "치과 케이스 사진을 십자·격자 배치로 정렬하고 PNG로 저장하는 무료 웹 도구. 사진은 서버로 전송되지 않고 브라우저 안에서만 처리됩니다.",
+    "applicationCategory": "MedicalApplication",
+    "operatingSystem": "Web",
+    "inLanguage": "ko",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" },
+    "creator": { "@type": "Organization", "name": "이음턱편한치과", "url": "https://eumtmj.co.kr/" }
+  }
+  </script>
   <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="%2335C7B0"/><g fill="%2306231D"><path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/><path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/><path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/><path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/><rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/></g></svg>'>
   <style>
     :root {
@@ -1093,6 +1109,35 @@
 
     #fileInput, .slot-input { display: none; }
 
+    /* 페이지 하단 소개 글 — 검색엔진이 읽는 텍스트. 도구 화면을 방해하지 않게 조용한 톤 */
+    .seo-about {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 44px 28px 28px;
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.75;
+      border-top: 1px solid var(--line);
+    }
+
+    .seo-about h2 {
+      color: var(--text);
+      font-size: 17px;
+      margin: 0 0 12px;
+    }
+
+    .seo-about h3 {
+      color: #C4D2DC;
+      font-size: 14.5px;
+      margin: 22px 0 8px;
+    }
+
+    .seo-about p { margin: 0 0 10px; }
+    .seo-about ul { margin: 0 0 10px; padding-left: 20px; }
+    .seo-about li { margin-bottom: 4px; }
+    .seo-about strong { color: #C4D2DC; font-weight: 700; }
+    .seo-about a { color: var(--accent); }
+
     .toast {
       position: fixed;
       left: 50%;
@@ -1281,6 +1326,7 @@
       .asset-list { height: 100px; }
       /* 빈 화면 안내가 있을 때는 높이를 내용에 맞춰 늘려 잘리지 않게 한다 */
       .asset-list:has(.asset-empty) { height: auto; }
+      .seo-about { padding: 28px 20px 20px; }
       .sitebar { padding: 7px 12px; white-space: normal; text-align: center; }
     }
   </style>
@@ -1591,6 +1637,24 @@
       <span>제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a> &middot; <a href="mailto:eumtmj@gmail.com">eumtmj@gmail.com</a></span>
     </footer>
   </main>
+
+    <section class="seo-about" id="about">
+      <h2>CaseFrame 소개 — 치과 케이스 사진 정리·배열 무료 프로그램</h2>
+      <p>CaseFrame(케이스프레임)은 치과의사를 위한 <strong>케이스 사진 정리 웹 도구</strong>입니다. 구강 사진, 교정 전후 사진, 석고 모델 사진, X-ray를 십자(5장)·격자(2×2, 3×2, 3×3 등) 배치로 정렬하고, 발표나 기록에 바로 쓸 수 있는 PNG 이미지로 저장합니다. 파워포인트에서 사진을 하나씩 맞추던 작업을 브라우저에서 1분 안에 끝낼 수 있습니다.</p>
+      <h3>주요 기능</h3>
+      <ul>
+        <li>상악·하악·정면·좌측·우측 <strong>십자 5장 배치</strong>와 전후 비교(BEFORE/AFTER)용 좌우·위아래 배치, 2×2·3×2·3×3 격자</li>
+        <li>사진별 확대·이동·회전·<strong>좌우/상하 반전</strong>(미러 촬영 보정)·밝기·대비 조정</li>
+        <li>환자 정보·진단·메모 텍스트 칸과 자유 글상자, 병원 로고 넣기</li>
+        <li>PNG/JPG 저장과 <strong>클립보드 복사</strong> — 전자차트나 PPT에 바로 붙여넣기</li>
+        <li>AI 배경 지우기(베타), 실행 취소, 배치 구성 기억</li>
+      </ul>
+      <h3>안심하고 쓸 수 있습니다</h3>
+      <p>설치와 회원가입이 없는 <strong>무료 도구</strong>이며 광고가 없습니다. 불러온 사진은 인터넷 서버로 전송되지 않고 사용하는 컴퓨터의 브라우저 안에서만 처리되므로, 환자 사진을 다루는 진료 환경에서도 안심하고 사용할 수 있습니다.</p>
+      <h3>이런 분들께 유용합니다</h3>
+      <p>교정·보철·임플란트 케이스 발표를 준비하는 치과의사, 스터디·연구회 발표 자료를 만드는 분, 임상 사진을 일정한 포맷으로 기록하고 싶은 치과에 맞습니다. 관악구 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral">이음턱편한치과</a>가 만들어 무료로 공개합니다. 문의: <a href="mailto:eumtmj@gmail.com">eumtmj@gmail.com</a></p>
+    </section>
+
 
   <div class="preview-overlay" id="previewOverlay">
     <div class="preview-panel">
