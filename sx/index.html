@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="진료 구술을 받아쓰고, 항상 같은 형식의 차트 문장으로 요약해 덴트웹에 붙여넣는 도구.">
+<title>증상 요약 — 진료 구술을 차트 문장으로</title>
+<style>
+  :root {
+    --bg:#F4F6F8; --card:#fff; --line:#E3E8ED; --ink:#1C262E; --sub:#5B6B77;
+    --faint:#8B9AA6; --accent:#35C7B0; --accent-dark:#2AA391; --accent-ink:#06231D;
+    --sec:#35A08F; --danger:#E05B4D;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:"Apple SD Gothic Neo",Pretendard,"Noto Sans KR",-apple-system,sans-serif;
+    background:var(--bg); color:var(--ink); padding-bottom:40px;
+  }
+  button { font:inherit; color:inherit; background:none; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  input, textarea { font:inherit; color:var(--ink); }
+
+  .topbar {
+    position:sticky; top:0; z-index:10; background:var(--card);
+    border-bottom:1px solid var(--line); padding:12px 18px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .logo { width:30px; height:30px; border-radius:8px; background:var(--accent); display:grid; place-items:center; color:var(--accent-ink); font-weight:900; font-size:15px; flex:none; }
+  .topbar h1 { font-size:17px; font-weight:800; }
+  .privacy { font-size:11.5px; color:var(--faint); }
+  .settings-toggle { margin-left:auto; font-size:13px; font-weight:700; color:var(--sub); border:1.5px solid var(--line); border-radius:9px; padding:8px 14px; background:#F7F9FA; }
+
+  main { max-width:760px; margin:0 auto; padding:14px 14px 0; }
+  .sec { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 16px; margin-bottom:12px; }
+  .sec h2 { font-size:12.5px; color:var(--sec); font-weight:800; letter-spacing:.5px; margin-bottom:10px; }
+
+  /* 설정 */
+  #settings { display:none; }
+  #settings.open { display:block; }
+  .set-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .set-row label { width:84px; font-size:13.5px; font-weight:700; color:var(--sub); flex:none; }
+  .set-row input {
+    flex:1; min-width:200px; height:42px; border:1.5px solid #D5DCE3; border-radius:10px;
+    background:#fff; padding:0 12px; font-size:14px;
+  }
+  .set-help { font-size:12.5px; color:var(--faint); line-height:1.6; }
+  .set-help a { color:var(--sec); }
+  .btn-save { height:42px; padding:0 18px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font-weight:800; }
+
+  /* 입력 */
+  .mic-row { display:flex; gap:10px; align-items:stretch; margin-bottom:10px; }
+  #micBtn {
+    flex:1; height:58px; border-radius:13px; border:1.5px solid #D5DCE3; background:#fff;
+    font-size:16px; font-weight:800; color:var(--sub);
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  #micBtn.listening { background:#FDECEA; border-color:#F1B7B1; color:#B23A2E; }
+  #micBtn .dot { width:12px; height:12px; border-radius:50%; background:var(--danger); display:none; }
+  #micBtn.listening .dot { display:block; animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+  #clearInput { width:110px; border-radius:13px; border:1.5px solid #D5DCE3; background:#fff; color:var(--sub); font-size:14px; font-weight:700; }
+
+  #transcript {
+    width:100%; min-height:150px; border:1.5px solid #D5DCE3; border-radius:12px;
+    background:#fff; padding:12px 14px; font-size:15px; line-height:1.7; resize:vertical;
+  }
+  #transcript::placeholder { color:#B4BEC7; }
+  .interim { font-size:13px; color:var(--faint); min-height:18px; margin-top:6px; }
+
+  #summarizeBtn {
+    width:100%; height:58px; border-radius:13px; background:var(--accent); color:var(--accent-ink);
+    font-size:17px; font-weight:900; box-shadow:0 6px 18px rgba(53,199,176,.35); margin-bottom:12px;
+  }
+  #summarizeBtn:disabled { opacity:.55; box-shadow:none; }
+
+  #result {
+    width:100%; min-height:170px; border:1.5px dashed rgba(53,199,176,.6); border-radius:12px;
+    background:#EFF6F4; padding:12px 14px; font-size:15px; line-height:1.8; resize:vertical;
+  }
+  #result::placeholder { color:#9BB5AE; }
+  .result-actions { display:flex; gap:10px; margin-top:10px; }
+  #copyBtn { flex:2; height:52px; border-radius:12px; background:var(--accent); color:var(--accent-ink); font-size:15.5px; font-weight:900; }
+  #resetBtn { flex:1; height:52px; border-radius:12px; border:1.5px solid #D5DCE3; background:#fff; color:var(--sub); font-size:14.5px; font-weight:800; }
+
+  #error { color:var(--danger); font-size:13.5px; line-height:1.6; margin-top:8px; display:none; word-break:break-all; }
+
+  #toast {
+    position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(16px);
+    background:#1C262E; color:#fff; font-size:14.5px; font-weight:700;
+    padding:12px 22px; border-radius:12px; opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s; z-index:20; white-space:nowrap;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  footer.credit { text-align:center; padding:16px 14px 0; font-size:12px; color:var(--faint); line-height:1.7; }
+  footer.credit a { color:var(--sec); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">S</div>
+  <h1>증상 요약</h1>
+  <span class="privacy">구술 → 항상 같은 형식의 차트 문장</span>
+  <button class="settings-toggle" id="settingsToggle">설정</button>
+</header>
+
+<main>
+
+  <section class="sec" id="settings">
+    <h2>설정 — 처음 한 번만</h2>
+    <div class="set-row">
+      <label for="apiKey">API 키</label>
+      <input id="apiKey" type="password" placeholder="제미나이 API 키 붙여넣기" autocomplete="off">
+      <button class="btn-save" id="saveKey">저장</button>
+    </div>
+    <div class="set-row">
+      <label for="modelName">모델</label>
+      <input id="modelName" type="text" value="gemini-2.5-flash">
+    </div>
+    <p class="set-help">
+      키 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>에서 구글 계정으로 로그인 → "API 키 만들기" → 복사해서 위에 붙여넣기.
+      키는 <strong>이 기기의 브라우저에만</strong> 저장되며 다른 곳으로 전송되지 않습니다.
+    </p>
+  </section>
+
+  <section class="sec">
+    <h2>1. 증상 구술 — 말하거나 붙여넣기</h2>
+    <div class="mic-row">
+      <button id="micBtn"><span class="dot"></span><span id="micLabel">마이크로 받아쓰기 시작</span></button>
+      <button id="clearInput">지우기</button>
+    </div>
+    <textarea id="transcript" placeholder="마이크 버튼을 누르고 환자 증상을 말하거나, 다른 앱의 녹음 텍스트를 여기에 붙여넣으세요.&#10;예: 3개월 전 하품하다가 오른쪽 턱에서 소리가 나기 시작했고, 요즘은 씹을 때 귀 앞이 아프답니다. 아침에 뻣뻣하고..."></textarea>
+    <div class="interim" id="interim"></div>
+  </section>
+
+  <button id="summarizeBtn">차트 문장 만들기</button>
+
+  <section class="sec">
+    <h2>2. 차트 문장 — 확인·수정 후 복사</h2>
+    <textarea id="result" placeholder="여기에 항상 같은 형식으로 정리됩니다:&#10;C.C: / Onset: / 양상: / 악화·완화: / 동반: / 과거력: / 습관: / 기타:"></textarea>
+    <div class="result-actions">
+      <button id="resetBtn">다음 환자 (모두 지우기)</button>
+      <button id="copyBtn">복사 — 덴트웹에 붙여넣기</button>
+    </div>
+    <div id="error"></div>
+  </section>
+
+  <footer class="credit">
+    받아쓰기·요약에 구글 서비스가 사용됩니다. 녹음에 환자 이름 등 식별 정보는 말하지 마세요.<br>
+    제작 <a href="https://eumtmj.co.kr/?utm_source=symptomnote&utm_medium=referral">이음턱편한치과</a> · 입력 내용은 요약 요청 외에는 어디에도 저장되지 않습니다
+  </footer>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── 고정 프롬프트: 형식이 코드에 박혀 있어 매번 동일한 출력 ──
+  const SYSTEM_PROMPT = [
+    '너는 치과 턱관절(TMD) 진료 기록 보조 도구다. 입력은 의사가 구술한 환자 증상 설명이다.',
+    '아래 형식의 차트 문장만 출력한다.',
+    '',
+    '규칙:',
+    '- 인사말, 머리말, 맺음말, 부연 설명, 마크다운 서식(굵게, 목록 기호 등)을 절대 쓰지 않는다. 항목 줄만 출력한다.',
+    '- 각 항목은 "항목명: 내용" 한 줄. 입력에 해당 내용이 없으면 그 항목 줄은 통째로 생략한다.',
+    '- 내용은 간결한 의무기록체(명사형 종결)로 쓴다. 예: "우측 저작 시 이통", "3개월 전 하품 후 발생".',
+    '- 입력에 있는 사실만 쓴다. 추측, 해석, 진단명 추가를 하지 않는다.',
+    '- 환자 이름 등 개인 식별 정보가 입력에 있으면 제외한다.',
+    '',
+    '형식(이 순서 그대로):',
+    'C.C: 주된 호소',
+    'Onset: 발병 시기와 계기',
+    '양상: 통증·증상의 부위, 성격, 나타나는 상황',
+    '악화/완화: 악화 요인과 완화 요인',
+    '동반: 동반 증상(두통, 목·어깨, 귀 증상 등)',
+    '과거력: 관련 치료 경험·병력',
+    '습관: 이갈이, 이 악물기, 턱 괴기 등 관련 습관',
+    '기타: 위에 넣기 어려운 나머지 언급'
+  ].join('\n');
+
+  const $ = id => document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer;
+  const showToast = msg => {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  };
+
+  // ── 설정(API 키·모델): 이 기기 localStorage에만 저장 ──
+  const KEY_STORE = 'symptom-note-gemini-key';
+  const MODEL_STORE = 'symptom-note-gemini-model';
+  const settings = $('settings');
+  $('apiKey').value = localStorage.getItem(KEY_STORE) || '';
+  $('modelName').value = localStorage.getItem(MODEL_STORE) || 'gemini-2.5-flash';
+  if (!$('apiKey').value) settings.classList.add('open');   // 키 없으면 설정을 처음부터 펼침
+
+  $('settingsToggle').addEventListener('click', () => settings.classList.toggle('open'));
+  $('saveKey').addEventListener('click', () => {
+    localStorage.setItem(KEY_STORE, $('apiKey').value.trim());
+    localStorage.setItem(MODEL_STORE, $('modelName').value.trim() || 'gemini-2.5-flash');
+    settings.classList.remove('open');
+    showToast('저장되었습니다 — 이 기기에만 보관됩니다');
+  });
+
+  // ── 마이크 받아쓰기 (브라우저 내장, 한국어) ──
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn = $('micBtn'), micLabel = $('micLabel'), interim = $('interim'), transcript = $('transcript');
+  let rec = null, listening = false;
+
+  function appendFinal(text) {
+    const t = text.trim();
+    if (!t) return;
+    transcript.value = (transcript.value.trim() + ' ' + t).trim();
+  }
+
+  if (!SR) {
+    micLabel.textContent = '이 브라우저는 받아쓰기를 지원하지 않습니다 — 붙여넣기를 이용하세요';
+    micBtn.disabled = true;
+  } else {
+    rec = new SR();
+    rec.lang = 'ko-KR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = e => {
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) appendFinal(r[0].transcript);
+        else interimText += r[0].transcript;
+      }
+      interim.textContent = interimText;
+    };
+    rec.onerror = e => {
+      stopMic();
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        showToast('마이크 권한이 필요합니다 — 브라우저 주소창의 마이크 허용을 확인하세요');
+      } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        showToast('받아쓰기 오류: ' + e.error);
+      }
+    };
+    rec.onend = () => { if (listening) { try { rec.start(); } catch (_) {} } }; // 자동 재시작
+    micBtn.addEventListener('click', () => listening ? stopMic() : startMic());
+  }
+
+  function startMic() {
+    try { rec.start(); } catch (_) {}
+    listening = true;
+    micBtn.classList.add('listening');
+    micLabel.textContent = '듣는 중… 누르면 정지';
+  }
+  function stopMic() {
+    listening = false;
+    try { rec && rec.stop(); } catch (_) {}
+    micBtn.classList.remove('listening');
+    micLabel.textContent = '마이크로 받아쓰기 시작';
+    interim.textContent = '';
+  }
+
+  $('clearInput').addEventListener('click', () => { transcript.value = ''; interim.textContent = ''; });
+
+  // ── 요약: 제미나이 API 호출 ──
+  const errBox = $('error');
+  const showErr = msg => { errBox.style.display = 'block'; errBox.textContent = msg; };
+  const hideErr = () => { errBox.style.display = 'none'; };
+
+  async function summarize() {
+    hideErr();
+    const input = transcript.value.trim();
+    if (!input) { showToast('먼저 증상 내용을 말하거나 붙여넣어 주세요'); return; }
+    const key = localStorage.getItem(KEY_STORE);
+    if (!key) { settings.classList.add('open'); showToast('설정에서 API 키를 먼저 저장해 주세요'); return; }
+    const model = localStorage.getItem(MODEL_STORE) || 'gemini-2.5-flash';
+
+    stopMic();
+    const btn = $('summarizeBtn');
+    btn.disabled = true; btn.textContent = '정리하는 중…';
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: [{ role: 'user', parts: [{ text: input }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1000 }
+          })
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        const m = data?.error?.message || `HTTP ${res.status}`;
+        showErr('요약 실패: ' + m + (res.status === 400 || res.status === 403 ? ' — 설정의 API 키를 확인해 주세요.' : ''));
+        return;
+      }
+      const text = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+      if (!text) { showErr('응답이 비어 있습니다. 다시 시도해 주세요.'); return; }
+      $('result').value = text;
+      showToast('정리되었습니다 — 확인 후 복사하세요');
+    } catch (e) {
+      showErr('네트워크 오류: ' + e.message + ' — 인터넷 연결을 확인해 주세요.');
+    } finally {
+      btn.disabled = false; btn.textContent = '차트 문장 만들기';
+    }
+  }
+  $('summarizeBtn').addEventListener('click', summarize);
+
+  // ── 복사·초기화 ──
+  $('copyBtn').addEventListener('click', async () => {
+    const t = $('result').value.trim();
+    if (!t) { showToast('복사할 내용이 없습니다'); return; }
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch (_) {
+      $('result').select(); document.execCommand('copy');
+      window.getSelection()?.removeAllRanges();
+    }
+    showToast('복사되었습니다 — 덴트웹에 붙여넣으세요');
+  });
+
+  $('resetBtn').addEventListener('click', () => {
+    if (!confirm('입력과 결과를 모두 지우고 다음 환자를 시작할까요?')) return;
+    stopMic();
+    transcript.value = ''; $('result').value = ''; interim.textContent = ''; hideErr();
+    window.scrollTo({ top: 0 });
+    showToast('초기화되었습니다');
+  });
+})();
+</script>
+</body>
+</html>
