@@ -39,10 +39,12 @@
   #settings.open { display:block; }
   .set-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .set-row label { width:84px; font-size:13.5px; font-weight:700; color:var(--sub); flex:none; }
-  .set-row input {
+  .set-row input, .set-row select {
     flex:1; min-width:200px; height:42px; border:1.5px solid #D5DCE3; border-radius:10px;
     background:#fff; padding:0 12px; font-size:14px;
   }
+  .btn-lite { height:42px; padding:0 14px; border-radius:10px; border:1.5px solid var(--line); background:#F7F9FA; color:var(--sub); font-weight:700; font-size:13.5px; flex:none; }
+  .set-msg { font-size:12.5px; color:var(--sec); min-height:18px; margin:-2px 0 8px; }
   .set-help { font-size:12.5px; color:var(--faint); line-height:1.6; }
   .set-help a { color:var(--sec); }
   .btn-save { height:42px; padding:0 18px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font-weight:800; }
@@ -130,12 +132,15 @@
       <button class="btn-save" id="saveKey">저장</button>
     </div>
     <div class="set-row">
-      <label for="modelName">모델</label>
-      <input id="modelName" type="text" value="gemini-2.5-flash">
+      <label for="modelSelect">모델</label>
+      <select id="modelSelect"></select>
+      <button class="btn-lite" id="reloadModels">목록 새로고침</button>
     </div>
+    <p class="set-msg" id="setMsg"></p>
     <p class="set-help">
       키 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>에서 구글 계정으로 로그인 → "API 키 만들기" → 복사해서 위에 붙여넣기.
       키는 <strong>이 기기의 브라우저에만</strong> 저장되며 다른 곳으로 전송되지 않습니다.
+      모델은 키를 저장하면 <strong>이 키로 쓸 수 있는 목록에서 자동으로 최신이 선택</strong>됩니다.
     </p>
   </section>
 
@@ -212,18 +217,90 @@
   // ── 설정(API 키·모델): 이 기기 localStorage에만 저장 ──
   const KEY_STORE = 'symptom-note-gemini-key';
   const MODEL_STORE = 'symptom-note-gemini-model';
+  const DEFAULT_MODEL = 'gemini-3.5-flash';
   const settings = $('settings');
+  const modelSel = $('modelSelect');
+  const setMsg = $('setMsg');
+
+  // 종료된 구모델(2.5)이 저장돼 있으면 자동 교정
+  if (/gemini-2\.5/.test(localStorage.getItem(MODEL_STORE) || '')) localStorage.setItem(MODEL_STORE, DEFAULT_MODEL);
+
   $('apiKey').value = localStorage.getItem(KEY_STORE) || '';
-  $('modelName').value = localStorage.getItem(MODEL_STORE) || 'gemini-2.5-flash';
   if (!$('apiKey').value) settings.classList.add('open');   // 키 없으면 설정을 처음부터 펼침
 
+  const storedModel = () => localStorage.getItem(MODEL_STORE) || DEFAULT_MODEL;
+
+  function fillSelect(ids, chosen) {
+    modelSel.innerHTML = '';
+    ids.forEach(id => {
+      const o = document.createElement('option');
+      o.value = o.textContent = id;
+      modelSel.appendChild(o);
+    });
+    if (!Array.from(modelSel.options).some(o => o.value === chosen)) {
+      const o = document.createElement('option');
+      o.value = o.textContent = chosen;
+      modelSel.insertBefore(o, modelSel.firstChild);
+    }
+    modelSel.value = chosen;
+  }
+  fillSelect([], storedModel());
+
+  const verOf = id => parseFloat((id.match(/gemini-(\d+(?:\.\d+)?)/) || [0, '0'])[1]) || 0;
+
+  // 사용 가능한 목록에서 가장 최신 flash(정식판·비-lite 우선)를 고름
+  function pickBest(ids) {
+    let pool = ids.filter(id => /flash/.test(id) && !/(live|tts|image|audio|embedding|imagen|veo)/.test(id));
+    const ga = pool.filter(id => !/(preview|exp)/.test(id));
+    if (ga.length) pool = ga;
+    const nonLite = pool.filter(id => !/lite/.test(id));
+    if (nonLite.length) pool = nonLite;
+    pool.sort((a, b) => verOf(b) - verOf(a) || a.length - b.length);
+    return pool[0] || ids[0] || DEFAULT_MODEL;
+  }
+
+  async function fetchModels(key) {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=' + encodeURIComponent(key));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || 'HTTP ' + res.status);
+    return (data.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => (m.name || '').replace(/^models\//, ''))
+      .filter(Boolean)
+      .sort((a, b) => verOf(b) - verOf(a) || a.localeCompare(b));
+  }
+
+  // autoPick=true면 저장된 값 무시하고 최신을 다시 고름
+  async function refreshModels(autoPick) {
+    const key = ($('apiKey').value || '').trim() || localStorage.getItem(KEY_STORE) || '';
+    if (!key) { setMsg.textContent = '먼저 API 키를 넣어 주세요.'; return false; }
+    setMsg.textContent = '이 키로 쓸 수 있는 모델을 확인하는 중…';
+    try {
+      const ids = await fetchModels(key);
+      const chosen = (!autoPick && ids.includes(storedModel())) ? storedModel() : pickBest(ids);
+      fillSelect(ids, chosen);
+      localStorage.setItem(MODEL_STORE, chosen);
+      setMsg.textContent = '사용 가능한 모델 ' + ids.length + '개 — 「' + chosen + '」 선택됨';
+      return true;
+    } catch (e) {
+      setMsg.textContent = '모델 목록을 불러오지 못했습니다: ' + e.message;
+      return false;
+    }
+  }
+
+  modelSel.addEventListener('change', () => localStorage.setItem(MODEL_STORE, modelSel.value));
+  $('reloadModels').addEventListener('click', () => refreshModels(true));
+
   $('settingsToggle').addEventListener('click', () => settings.classList.toggle('open'));
-  $('saveKey').addEventListener('click', () => {
+  $('saveKey').addEventListener('click', async () => {
     localStorage.setItem(KEY_STORE, $('apiKey').value.trim());
-    localStorage.setItem(MODEL_STORE, $('modelName').value.trim() || 'gemini-2.5-flash');
-    settings.classList.remove('open');
     showToast('저장되었습니다 — 이 기기에만 보관됩니다');
+    const ok = await refreshModels(false);
+    if (ok) settings.classList.remove('open');
   });
+
+  // 켤 때 키가 있으면 목록을 미리 확인 (실패해도 저장된 모델로 동작)
+  if (localStorage.getItem(KEY_STORE)) refreshModels(false);
 
   // ── 녹음: 브라우저 내장 받아쓰기 대신 직접 녹음해 제미나이로 전송 ──
   const recBtn = $('recBtn'), recLabel = $('recLabel');
@@ -380,7 +457,7 @@
       showStatus('설정에서 API 키를 먼저 저장해 주세요. (화면 위 "설정" 칸)', 'error');
       return;
     }
-    const model = localStorage.getItem(MODEL_STORE) || 'gemini-2.5-flash';
+    const model = storedModel();
 
     clearStatus();
     const btn = $('summarizeBtn');
@@ -399,13 +476,21 @@
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
             contents: [{ role: 'user', parts }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 4000, thinkingConfig: { thinkingBudget: 0 } }
+            generationConfig: { temperature: 0.2, maxOutputTokens: 8000 }
           })
         }
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const m = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+        // 모델이 종료·변경된 경우: 사용 가능한 목록을 다시 불러와 자동 교체
+        if (res.status === 404 || /not found|not supported/i.test(m)) {
+          showStatus('모델 「' + model + '」을 이 키로 쓸 수 없게 되었습니다. 쓸 수 있는 모델을 다시 찾는 중…', 'error');
+          const ok = await refreshModels(true);
+          if (ok) showStatus('모델을 「' + storedModel() + '」(으)로 바꿨습니다. "차트 문장 만들기"를 다시 눌러 주세요.', 'info');
+          else settings.classList.add('open');
+          return;
+        }
         showStatus('요약 실패: ' + m + (res.status === 400 || res.status === 403 ? ' — 설정의 API 키를 확인해 주세요.' : ''), 'error');
         return;
       }
