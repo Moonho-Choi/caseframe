@@ -285,6 +285,12 @@
       box-shadow: inset 0 1px 1px rgba(255, 255, 255, .14), 0 8px 22px rgba(53, 199, 176, .22);
     }
 
+    /* 편집 중에 다시 열면 지금 쓰는 배열이 표시된다 */
+    .start-lay.active {
+      border-color: rgba(53, 199, 176, .85);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .14), 0 0 0 1.5px rgba(53, 199, 176, .55), 0 8px 22px rgba(53, 199, 176, .25);
+    }
+
     .start-mini {
       aspect-ratio: 3 / 2;
       background: #F7F9FB;
@@ -1744,7 +1750,7 @@
     <div class="start-panel">
       <div class="start-head">
         <svg class="start-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="16" fill="url(#brandGrad)"/><g fill="#06231D"><path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/><path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/><path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/><path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/><rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/></g></svg>
-        <h2>어떤 배열로 시작할까요?</h2>
+        <h2>어떤 배열로 작업할까요?</h2>
         <p>배열은 편집 중에도 언제든 바꿀 수 있습니다 · 사진은 인터넷에 올라가지 않습니다</p>
       </div>
       <div class="start-grid">
@@ -1976,7 +1982,7 @@
     toolButtons.forEach(button => {
       button.addEventListener('click', () => {
         const tool = button.dataset.tool;
-        if (tool === 'photo') toggleLayoutPopover();
+        if (tool === 'photo') openStartOverlay();
         if (tool === 'text') createTextBox();
         if (tool === 'guides') toggleGuidePopover();
         if (tool === 'background') toggleBgPopover();
@@ -3602,8 +3608,17 @@
       if (savedLogo && savedLogo.src) createLogoBox(savedLogo);
     } catch (error) {}
 
-    // 시작 배열 선택창 — 접속할 때마다 먼저 보여준다. 바깥 클릭이나 Esc로 닫으면 십자로 시작한다.
+    // 배열 선택창 — 접속할 때 먼저 보여주고, 편집 중에도 왼쪽 배치 버튼으로 다시 연다.
+    // 바깥 클릭이나 Esc로 닫으면 현재 배열이 유지된다.
     const startOverlay = document.getElementById('startOverlay');
+
+    function openStartOverlay() {
+      closePopovers();
+      document.querySelectorAll('.start-lay').forEach(card => {
+        card.classList.toggle('active', card.dataset.startLayout === currentLayout);
+      });
+      startOverlay.classList.add('open');
+    }
     document.querySelectorAll('.start-lay').forEach(startBtn => {
       startBtn.addEventListener('click', () => {
         applyLayout(startBtn.dataset.startLayout, false);
@@ -3616,7 +3631,7 @@
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && startOverlay.classList.contains('open')) startOverlay.classList.remove('open');
     });
-    startOverlay.classList.add('open');
+    openStartOverlay();
 
     // 저장해 둔 프레임 설정(여백 농도·테두리 두께) 복원
     try {
