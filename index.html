@@ -233,6 +233,86 @@
       background: rgba(5, 9, 14, .78);
     }
 
+    /* ── 시작 배열 선택창 (B안, 원장 확정) — 접속하면 편집기 위에 떠서 가능한 배열을 먼저 보여준다 ── */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 45;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      overflow-y: auto;
+      background: rgba(6, 10, 15, .68);
+      -webkit-backdrop-filter: blur(9px);
+      backdrop-filter: blur(9px);
+    }
+
+    .start-overlay.open { display: grid; }
+
+    .start-panel {
+      max-width: 720px;
+      width: 100%;
+      background: rgba(13, 19, 27, .85);
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 20px;
+      padding: 26px 24px 20px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 30px 80px rgba(0, 0, 0, .6);
+    }
+
+    .start-head { text-align: center; margin-bottom: 20px; }
+    .start-head .start-mark { width: 44px; height: 44px; margin: 0 auto 10px; }
+    .start-head h2 { font-size: 20px; margin: 0 0 5px; letter-spacing: -.02em; }
+    .start-head p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .start-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; }
+
+    .start-lay {
+      font: inherit;
+      color: inherit;
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .02));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .14), 0 6px 16px rgba(0, 0, 0, .3);
+      padding: 10px 10px 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: transform .12s, border-color .12s, box-shadow .12s;
+    }
+
+    .start-lay:hover {
+      transform: translateY(-2px);
+      border-color: rgba(53, 199, 176, .65);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, .14), 0 8px 22px rgba(53, 199, 176, .22);
+    }
+
+    .start-mini {
+      aspect-ratio: 3 / 2;
+      background: #F7F9FB;
+      border-radius: 7px;
+      padding: 5%;
+      display: grid;
+      gap: 4%;
+      margin-bottom: 8px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 4px 10px rgba(0, 0, 0, .35);
+    }
+
+    .start-mini i { background: #DDE3E9; border-radius: 2.5px; }
+    .start-mini i.t { background: #fff; box-shadow: inset 0 0 0 1px #E6EAEF; }
+    .start-mini i.lbl { position: relative; }
+    .start-mini i.lbl::after { content: attr(data-l); position: absolute; top: 6%; left: 8%; font-size: 5.5px; font-weight: 800; color: #8B96A2; letter-spacing: .04em; }
+    .start-lay h4 { margin: 0 0 2px; font-size: 12px; color: #E4EBF2; }
+    .start-cap { display: block; font-size: 10px; color: var(--muted); }
+    .start-quick { margin: 15px 0 0; text-align: center; color: #6d7d8e; font-size: 11px; }
+
+    .sg-cross { grid-template-columns: 1fr 1.28fr 1fr; grid-template-rows: .92fr 1fr .92fr; }
+    .sg-v2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .sg-h2 { grid-template-columns: 1fr 1fr; }
+    .sg-h3 { grid-template-columns: 1fr 1fr 1fr; }
+    .sg-22 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .sg-23 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+    .sg-32 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .sg-33 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+
     .preview-overlay.open { display: grid; }
 
     .preview-panel {
@@ -1329,6 +1409,9 @@
       .asset-list:has(.asset-empty) { height: auto; }
       .seo-about { padding: 28px 20px 20px; }
       .sitebar { padding: 7px 12px; white-space: normal; text-align: center; }
+      .start-overlay { place-items: start center; padding: 16px 12px; }
+      .start-panel { padding: 20px 16px 16px; }
+      .start-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -1656,6 +1739,51 @@
       <p>교정·보철·임플란트 케이스 발표를 준비하는 치과의사, 스터디·연구회 발표 자료를 만드는 분, 임상 사진을 일정한 포맷으로 기록하고 싶은 치과에 맞습니다. 관악구 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral">이음턱편한치과</a>가 만들어 무료로 공개합니다. 문의: <a href="mailto:eumtmj@gmail.com">eumtmj@gmail.com</a></p>
     </section>
 
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-panel">
+      <div class="start-head">
+        <svg class="start-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="16" fill="url(#brandGrad)"/><g fill="#06231D"><path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/><path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/><path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/><path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/><rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/></g></svg>
+        <h2>어떤 배열로 시작할까요?</h2>
+        <p>배열은 편집 중에도 언제든 바꿀 수 있습니다 · 사진은 인터넷에 올라가지 않습니다</p>
+      </div>
+      <div class="start-grid">
+        <button class="start-lay" data-start-layout="cross">
+          <span class="start-mini sg-cross"><i class="t"></i><i class="lbl" data-l="UP"></i><i class="t"></i><i class="lbl" data-l="R"></i><i class="lbl" data-l="F"></i><i class="lbl" data-l="L"></i><i class="t"></i><i class="lbl" data-l="LOW"></i><i class="t"></i></span>
+          <h4>십자 5장</h4><span class="start-cap">구내 사진 기록</span>
+        </button>
+        <button class="start-lay" data-start-layout="vertical2">
+          <span class="start-mini sg-v2"><i class="lbl" data-l="BEFORE"></i><i class="lbl" data-l="AFTER"></i></span>
+          <h4>위아래</h4><span class="start-cap">전후 비교 (세로)</span>
+        </button>
+        <button class="start-lay" data-start-layout="horizontal2">
+          <span class="start-mini sg-h2"><i class="lbl" data-l="BEFORE"></i><i class="lbl" data-l="AFTER"></i></span>
+          <h4>좌우</h4><span class="start-cap">전후 비교 (가로)</span>
+        </button>
+        <button class="start-lay" data-start-layout="horizontal3">
+          <span class="start-mini sg-h3"><i class="lbl" data-l="R"></i><i class="lbl" data-l="C"></i><i class="lbl" data-l="L"></i></span>
+          <h4>가로 3장</h4><span class="start-cap">안모 3면</span>
+        </button>
+        <button class="start-lay" data-start-layout="grid22">
+          <span class="start-mini sg-22"><i></i><i></i><i></i><i></i></span>
+          <h4>2 × 2</h4><span class="start-cap">자유 배치</span>
+        </button>
+        <button class="start-lay" data-start-layout="grid23">
+          <span class="start-mini sg-23"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <h4>2 × 3</h4><span class="start-cap">자유 배치</span>
+        </button>
+        <button class="start-lay" data-start-layout="grid32">
+          <span class="start-mini sg-32"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <h4>3 × 2</h4><span class="start-cap">자유 배치</span>
+        </button>
+        <button class="start-lay" data-start-layout="grid33">
+          <span class="start-mini sg-33"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <h4>3 × 3</h4><span class="start-cap">자유 배치</span>
+        </button>
+      </div>
+      <p class="start-quick">배열을 고르면 바로 편집이 시작됩니다</p>
+    </div>
+  </div>
 
   <div class="preview-overlay" id="previewOverlay">
     <div class="preview-panel">
@@ -3473,6 +3601,22 @@
       const savedLogo = JSON.parse(localStorage.getItem(LOGO_STORAGE_KEY) || 'null');
       if (savedLogo && savedLogo.src) createLogoBox(savedLogo);
     } catch (error) {}
+
+    // 시작 배열 선택창 — 접속할 때마다 먼저 보여준다. 바깥 클릭이나 Esc로 닫으면 십자로 시작한다.
+    const startOverlay = document.getElementById('startOverlay');
+    document.querySelectorAll('.start-lay').forEach(startBtn => {
+      startBtn.addEventListener('click', () => {
+        applyLayout(startBtn.dataset.startLayout, false);
+        startOverlay.classList.remove('open');
+      });
+    });
+    startOverlay.addEventListener('click', event => {
+      if (event.target === startOverlay) startOverlay.classList.remove('open');
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && startOverlay.classList.contains('open')) startOverlay.classList.remove('open');
+    });
+    startOverlay.classList.add('open');
 
     // 저장해 둔 프레임 설정(여백 농도·테두리 두께) 복원
     try {
