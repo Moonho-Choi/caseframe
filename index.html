@@ -90,7 +90,11 @@
       font-weight: 900;
       font-size: 22px;
       letter-spacing: -.035em;
+      cursor: pointer;
+      transition: opacity .12s;
     }
+
+    .brand:hover { opacity: .85; }
 
     .brand-mark {
       display: grid;
@@ -1424,7 +1428,7 @@
 <body>
   <main class="app">
     <header class="topbar">
-      <div class="brand">
+      <div class="brand" id="brandHome" role="button" tabindex="0" title="배열 선택 화면으로">
         <div class="brand-mark">
           <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
             <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#brandGrad)"/>
@@ -3627,6 +3631,12 @@
     });
     startOverlay.addEventListener('click', event => {
       if (event.target === startOverlay) startOverlay.classList.remove('open');
+    });
+    // 로고를 누르면 언제든 배열 선택 화면으로 돌아간다
+    const brandHome = document.getElementById('brandHome');
+    brandHome.addEventListener('click', openStartOverlay);
+    brandHome.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStartOverlay(); }
     });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && startOverlay.classList.contains('open')) startOverlay.classList.remove('open');
