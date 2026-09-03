@@ -167,7 +167,6 @@
     .btn.primary::before { background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0)); }
     .btn.primary:hover { background: linear-gradient(180deg, #65E6D1, #2AB598 55%, #23A78E); }
     .btn.ghost { background: transparent; }
-    a.btn { color: inherit; text-decoration: none; }
     .btn.icon { width: 34px; padding: 0; }
     .btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
 
@@ -314,6 +313,9 @@
     .start-lay h4 { margin: 0 0 3px; font-size: 14px; color: #E4EBF2; }
     .start-cap { display: block; font-size: 11.5px; color: var(--muted); }
     .start-quick { margin: 18px 0 0; text-align: center; color: #6d7d8e; font-size: 12px; }
+
+    .sg-line { position: relative; grid-template-columns: 1fr; }
+    .sg-line svg { position: absolute; left: 14%; top: 14%; width: 72%; height: 72%; }
 
     .sg-cross { grid-template-columns: 1fr 1.28fr 1fr; grid-template-rows: .92fr 1fr .92fr; }
     .sg-v2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
@@ -1448,7 +1450,6 @@
       </div>
       <div class="toolbar-group">
         <button class="btn ghost" id="resetAll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg> 전체 초기화</button>
-        <a class="btn ghost" href="/line/" target="_blank" rel="noopener" title="캡처한 엑스레이·사진 위에 직선·곡선을 그리는 도구 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20c4-9 8-9 11-4s5 3 7-6"/></svg> <span class="optional">선 그리기</span></a>
         <div class="history-group" role="group" aria-label="작업 되돌리기">
           <button class="history-btn" id="undoBtn" title="되돌리기 (Ctrl+Z)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
@@ -1791,6 +1792,10 @@
         <button class="start-lay" data-start-layout="grid33">
           <span class="start-mini sg-33"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
           <h4>3 × 3</h4><span class="start-cap">자유 배치</span>
+        </button>
+        <button class="start-lay" data-href="/line/" title="새 탭에서 열립니다 — 배열 작업은 그대로 남습니다">
+          <span class="start-mini sg-line"><i class="t"></i><svg viewBox="0 0 72 48" fill="none" aria-hidden="true"><line x1="10" y1="38" x2="62" y2="10" stroke="#8B96A2" stroke-width="3" stroke-linecap="round"/><path d="M10 12 C 24 40, 44 4, 62 34" stroke="#E05B4D" stroke-width="3.5" stroke-linecap="round"/></svg></span>
+          <h4>선그리기 전용</h4><span class="start-cap">캡처 위에 직선·곡선 (새 탭)</span>
         </button>
       </div>
       <p class="start-quick">배열을 고르면 바로 편집이 시작됩니다</p>
@@ -3627,6 +3632,11 @@
     }
     document.querySelectorAll('.start-lay').forEach(startBtn => {
       startBtn.addEventListener('click', () => {
+        if (startBtn.dataset.href) {                      // 선그리기 전용 — 별도 도구를 새 탭으로
+          window.open(startBtn.dataset.href, '_blank', 'noopener');
+          startOverlay.classList.remove('open');
+          return;
+        }
         applyLayout(startBtn.dataset.startLayout, false);
         startOverlay.classList.remove('open');
       });
