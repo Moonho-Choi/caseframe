@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="캡처한 엑스레이·사진 위에 직선과 곡선을 그려 복사·저장하는 도구.">
+<title>선 그리기 — 캡처 위에 직선·곡선</title>
+<style>
+:root{--bg:#14181c;--bar:#1f252b;--line:#2d353d;--ink:#e6ebef;--sub:#93a1ad;--accent:#35C7B0;--danger:#E05B4D}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Noto Sans KR",-apple-system,sans-serif;font-size:14px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+#bar{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--bar);border-bottom:1px solid var(--line);z-index:5;user-select:none;overflow-x:auto}
+#bar .sep{width:1px;height:24px;background:var(--line);margin:0 4px;flex:none}
+#bar button{height:30px;padding:0 10px;border-radius:6px;white-space:nowrap;flex:none}
+#bar button:hover{background:#2a323a}
+#bar button.on{background:var(--accent);color:#06231D}
+#bar button:disabled{opacity:.4;cursor:default}
+.sw{width:22px;height:22px;border-radius:50%;padding:0!important;border:2px solid #0006}
+.sw.on{outline:2px solid #fff;outline-offset:2px}
+.wd{display:flex;align-items:center;justify-content:center;width:34px;padding:0!important}
+.wd i{display:block;background:var(--ink);border-radius:2px;width:18px}
+.wd.on i{background:#06231D}
+body.fs #bar{display:none}
+#stage{position:absolute;inset:44px 0 0 0;cursor:crosshair}
+body.fs #stage{inset:0}
+#stage.pan{cursor:grab}#stage.panning{cursor:grabbing}
+canvas{display:block}
+#hint{position:absolute;inset:44px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--sub);pointer-events:none;text-align:center}
+#hint b{font-size:22px;color:var(--ink);font-weight:600}
+#hint.shake{animation:sh .4s}
+@keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast.show{opacity:1}
+#drop{position:fixed;inset:0;border:3px dashed var(--accent);background:#35C7B022;display:none;z-index:8;pointer-events:none}
+body.drag #drop{display:block}
+</style>
+</head>
+<body>
+<div id="bar">
+  <button id="tLine" title="직선 (1)">직선</button>
+  <button id="tCurve" title="곡선 (2)">곡선</button>
+  <span class="sep"></span>
+  <span id="colors" style="display:flex;gap:6px;align-items:center"></span>
+  <span class="sep"></span>
+  <span id="widths" style="display:flex;gap:2px;align-items:center"></span>
+  <span class="sep"></span>
+  <button id="bUndo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
+  <button id="bRedo" title="다시 실행 (Ctrl+Y)">다시 실행</button>
+  <button id="bClear" title="모두 지우기">모두 지우기</button>
+  <span class="sep"></span>
+  <button id="bFit" title="맞춤 (0)">맞춤</button>
+  <button id="bFs" title="전체화면 (F)">전체화면</button>
+  <span class="sep"></span>
+  <button id="bCopy" title="복사 (Ctrl+C)">복사</button>
+  <button id="bSave" title="저장 (Ctrl+S)">저장</button>
+  <button id="bOpen" title="사진 열기">사진 열기</button>
+  <input id="file" type="file" accept="image/*" hidden>
+</div>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="hint"><b>캡처한 화면을 붙여넣으세요 (Ctrl+V)</b><span>파일을 끌어다 놓거나 "사진 열기"를 눌러도 됩니다</span></div>
+<div id="drop"></div>
+<div id="toast"></div>
+<script>
+'use strict';
+// ===== 상태 =====
+const view = { img:null, scale:1, ox:0, oy:0, fitScale:1 };
+let shapes = [];        // {type:'line'|'curve', points:[{x,y}], color, width}  (사진 좌표)
+let sel = -1;           // 선택된 도형 index
+let tool = 'line';      // 'line' | 'curve'
+let color = '#ff2d2d';
+let width = 4;          // 화면 px
+let draft = null;       // 진행 중 동작: {kind:'line'|'curve'|'drag'|'pan', ...}
+let space = false;
+const undoStack = [], redoStack = [];
+const COLORS = ['#ff2d2d','#ffd21f','#3ddc5a','#3b8bff','#ffffff'];
+const WIDTHS = [2,4,7];
+
+const $ = id => document.getElementById(id);
+const stage = $('stage'), cv = $('cv'), ctx = cv.getContext('2d');
+
+// ===== 좌표 변환 (화면 CSS px ↔ 사진 px) =====
+function toImg(sx, sy){ return { x:(sx - view.ox)/view.scale, y:(sy - view.oy)/view.scale }; }
+function toScr(p){ return { x:p.x*view.scale + view.ox, y:p.y*view.scale + view.oy }; }
+function pos(e){ const r = cv.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; }
+
+// ===== 안내 =====
+let toastTimer;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 2200); }
+function shakeHint(){ const h = $('hint'); h.classList.remove('shake'); void h.offsetWidth; h.classList.add('shake'); }
+
+// ===== 뷰 =====
+function resize(){
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(stage.clientWidth*dpr); cv.height = Math.round(stage.clientHeight*dpr);
+  cv.style.width = stage.clientWidth+'px'; cv.style.height = stage.clientHeight+'px';
+  fit();
+}
+function fit(){
+  if(!view.img){ render(); return; }
+  const W = stage.clientWidth, H = stage.clientHeight;
+  const s = Math.min(W/view.img.width, H/view.img.height);
+  view.scale = s; view.fitScale = s;
+  view.ox = (W - view.img.width*s)/2; view.oy = (H - view.img.height*s)/2;
+  render();
+}
+function zoomAt(sx, sy, f){
+  const p = toImg(sx, sy);
+  view.scale = Math.min(Math.max(view.scale*f, view.fitScale*0.2), view.fitScale*20);
+  view.ox = sx - p.x*view.scale; view.oy = sy - p.y*view.scale;
+  render();
+}
+
+// ===== 사진 입력 =====
+function loadImage(src){
+  if(shapes.length && !confirm('새 사진을 열면 그린 선이 모두 지워집니다. 계속할까요?')) return;
+  const im = new Image();
+  im.onload = ()=>{
+    view.img = im; shapes = []; sel = -1; draft = null;
+    undoStack.length = 0; redoStack.length = 0;
+    $('hint').style.display = 'none';
+    fit(); updateButtons();
+  };
+  im.onerror = ()=>toast('이미지를 열 수 없습니다');
+  im.src = src;
+}
+function loadFile(f){
+  if(!f || !f.type.startsWith('image/')){ toast('이미지가 아닙니다'); return; }
+  loadImage(URL.createObjectURL(f));
+}
+document.addEventListener('paste', e=>{
+  const it = [...(e.clipboardData?.items || [])].find(i=>i.type.startsWith('image/'));
+  if(!it){ toast('붙여넣은 내용에 이미지가 없습니다'); return; }
+  e.preventDefault(); loadFile(it.getAsFile());
+});
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev, e=>{ e.preventDefault(); document.body.classList.add('drag'); }));
+document.addEventListener('dragleave', e=>{ if(!e.relatedTarget) document.body.classList.remove('drag'); });
+document.addEventListener('drop', e=>{ e.preventDefault(); document.body.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); });
+$('bOpen').onclick = ()=>$('file').click();
+$('file').onchange = e=>{ loadFile(e.target.files[0]); e.target.value = ''; };
+
+// ===== 렌더러 =====
+function render(){
+  const dpr = devicePixelRatio || 1;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!view.img) return;
+  ctx.drawImage(view.img, view.ox, view.oy, view.img.width*view.scale, view.img.height*view.scale);
+  // [도형]
+  // [초안]
+  // [핸들]
+}
+function updateButtons(){
+  $('bUndo').disabled = !undoStack.length;
+  $('bRedo').disabled = !redoStack.length;
+}
+
+// ===== 입력 =====
+stage.addEventListener('wheel', e=>{ if(!view.img) return; e.preventDefault(); const {x,y} = pos(e); zoomAt(x, y, e.deltaY < 0 ? 1.15 : 1/1.15); }, {passive:false});
+stage.addEventListener('contextmenu', e=>e.preventDefault());
+stage.addEventListener('mousedown', e=>{
+  if(!view.img){ shakeHint(); return; }
+  const {x,y} = pos(e);
+  if(e.button === 1 || space){ e.preventDefault(); draft = {kind:'pan', sx:x, sy:y, ox:view.ox, oy:view.oy}; stage.classList.add('panning'); return; }
+  // [마우스다운]
+});
+stage.addEventListener('mousemove', e=>{
+  if(!draft) return;
+  const {x,y} = pos(e);
+  if(draft.kind === 'pan'){ view.ox = draft.ox + x - draft.sx; view.oy = draft.oy + y - draft.sy; render(); return; }
+  // [마우스무브]
+});
+window.addEventListener('mouseup', e=>{
+  if(!draft) return;
+  if(draft.kind === 'pan'){ draft = null; stage.classList.remove('panning'); return; }
+  // [마우스업]
+});
+window.addEventListener('keydown', e=>{
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if(e.code === 'Space' && !e.repeat){ space = true; stage.classList.add('pan'); e.preventDefault(); return; }
+  // [단축키-수정자]
+  if(mod) return;
+  switch(e.key){
+    case '0': fit(); break;
+    // [단축키]
+  }
+});
+window.addEventListener('keyup', e=>{ if(e.code === 'Space'){ space = false; stage.classList.remove('pan'); } });
+$('bFit').onclick = fit;
+window.addEventListener('resize', resize);
+resize(); updateButtons();
+
+// ===== 검증용 =====
+window.LineTool = { loadImage, get shapes(){ return shapes; }, view, get draft(){ return draft; } };
+</script>
+</body>
+</html>
