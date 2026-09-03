@@ -292,10 +292,12 @@ window.addEventListener('keydown', e=>{
   if(e.code === 'Space' && !e.repeat){ space = true; stage.classList.add('pan'); e.preventDefault(); return; }
   if(mod && k === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if(mod && k === 'y'){ e.preventDefault(); redo(); return; }
-  // [단축키-복사저장]
+  if(mod && k === 'c'){ e.preventDefault(); copyImage(); return; }
+  if(mod && k === 's'){ e.preventDefault(); saveImage(); return; }
   if(mod) return;
   switch(e.key){
     case '0': fit(); break;
+    case 'f': case 'F': toggleFs(); break;
     case '1': setTool('line'); break;
     case '2': setTool('curve'); break;
     case 'Escape': if(draft){ draft = null; render(); } else if(sel >= 0){ sel = -1; render(); } break;
@@ -308,8 +310,45 @@ $('bFit').onclick = fit;
 window.addEventListener('resize', resize);
 resize(); updateButtons();
 
+// ===== 저장·복사 =====
+function exportCanvas(){
+  const im = view.img, c = document.createElement('canvas');
+  c.width = im.width; c.height = im.height;
+  const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+  drawShapes(x, shapes, p=>p, 1/view.fitScale);   // 맞춤 화면에서 보이는 굵기 비율 유지
+  return c;
+}
+async function copyImage(){
+  if(!view.img){ shakeHint(); return; }
+  try{
+    const blob = await new Promise(r=>exportCanvas().toBlob(r, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+    toast('복사됨 — 차트나 파워포인트에 붙여넣으세요');
+  }catch(err){
+    toast('복사가 되지 않습니다. 저장 버튼을 이용하세요');
+    $('bSave').classList.add('on'); setTimeout(()=>$('bSave').classList.remove('on'), 1500);
+  }
+}
+function saveImage(){
+  if(!view.img){ shakeHint(); return; }
+  const d = new Date(), p = n=>String(n).padStart(2,'0');
+  const a = document.createElement('a');
+  a.download = `line-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.png`;
+  a.href = exportCanvas().toDataURL('image/png'); a.click();
+}
+$('bCopy').onclick = copyImage; $('bSave').onclick = saveImage;
+
+// ===== 전체화면 =====
+function toggleFs(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(()=>toast('전체화면을 사용할 수 없습니다'));
+}
+document.addEventListener('fullscreenchange', ()=>{ document.body.classList.toggle('fs', !!document.fullscreenElement); resize(); });
+$('bFs').onclick = toggleFs;
+window.addEventListener('beforeunload', e=>{ if(shapes.length){ e.preventDefault(); e.returnValue = ''; } });
+
 // ===== 검증용 =====
-window.LineTool = { loadImage, get shapes(){ return shapes; }, view, get draft(){ return draft; }, undo, redo };
+window.LineTool = { loadImage, get shapes(){ return shapes; }, view, get draft(){ return draft; }, undo, redo, exportCanvas };
 </script>
 </body>
 </html>
