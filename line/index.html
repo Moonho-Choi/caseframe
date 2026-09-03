@@ -100,6 +100,7 @@ function resize(){
 function fit(){
   if(!view.img){ render(); return; }
   const W = stage.clientWidth, H = stage.clientHeight;
+  if(!W || !H) return;                   // 창이 숨겨져 크기가 0이면 배율을 건드리지 않는다
   const s = Math.min(W/view.img.width, H/view.img.height);
   view.scale = s; view.fitScale = s;
   view.ox = (W - view.img.width*s)/2; view.oy = (H - view.img.height*s)/2;
@@ -147,13 +148,56 @@ function render(){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!view.img) return;
   ctx.drawImage(view.img, view.ox, view.oy, view.img.width*view.scale, view.img.height*view.scale);
-  // [도형]
-  // [초안]
+  drawShapes(ctx, shapes, toScr, 1);
+  if(draft) drawDraft();
   // [핸들]
+}
+function splinePath(path, p){            // Task 3에서 Catmull-Rom으로 교체
+  path.moveTo(p[0].x, p[0].y);
+  for(let i=1;i<p.length;i++) path.lineTo(p[i].x, p[i].y);
+}
+function strokeShape(c, s, map, k){       // map: 사진→목표 좌표, k: 굵기 배율
+  const pts = s.points.map(map);
+  if(pts.length < 2) return;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const path = new Path2D();
+  if(s.type === 'line'){ path.moveTo(pts[0].x, pts[0].y); path.lineTo(pts[1].x, pts[1].y); }
+  else splinePath(path, pts);
+  c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = (s.width + 3)*k; c.stroke(path);
+  c.strokeStyle = s.color; c.lineWidth = s.width*k; c.stroke(path);
+}
+function drawShapes(c, list, map, k){ for(const s of list) strokeShape(c, s, map, k); }
+function drawDraft(){
+  if(draft.kind === 'line' && draft.end) strokeShape(ctx, {type:'line', points:[draft.start, draft.end], color, width}, toScr, 1);
+  // [초안-곡선]
 }
 function updateButtons(){
   $('bUndo').disabled = !undoStack.length;
   $('bRedo').disabled = !redoStack.length;
+}
+
+// ===== 되돌리기 =====
+function snapshot(){ undoStack.push(JSON.stringify(shapes)); if(undoStack.length > 50) undoStack.shift(); redoStack.length = 0; updateButtons(); }
+function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(shapes)); shapes = JSON.parse(undoStack.pop()); sel = -1; draft = null; render(); updateButtons(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(shapes)); shapes = JSON.parse(redoStack.pop()); sel = -1; draft = null; render(); updateButtons(); }
+function commit(shape){ snapshot(); shapes.push(shape); sel = -1; draft = null; render(); }
+function clearAll(){ if(!shapes.length) return; if(!confirm('그린 선을 모두 지울까요?')) return; snapshot(); shapes = []; sel = -1; draft = null; render(); }
+
+// ===== 도구·색·굵기 =====
+function setTool(t){ tool = t; if(draft && (draft.kind === 'line' || draft.kind === 'curve')) draft = null; $('tLine').classList.toggle('on', t === 'line'); $('tCurve').classList.toggle('on', t === 'curve'); render(); }
+function setColor(c){ color = c; [...$('colors').children].forEach(b=>b.classList.toggle('on', b.dataset.c === c)); if(sel >= 0){ snapshot(); shapes[sel].color = c; render(); } }
+function setWidth(w){ width = w; [...$('widths').children].forEach(b=>b.classList.toggle('on', +b.dataset.w === w)); if(sel >= 0){ snapshot(); shapes[sel].width = w; render(); } }
+COLORS.forEach(c=>{ const b = document.createElement('button'); b.className = 'sw'; b.dataset.c = c; b.style.background = c; b.title = c; b.onclick = ()=>setColor(c); $('colors').appendChild(b); });
+WIDTHS.forEach(w=>{ const b = document.createElement('button'); b.className = 'wd'; b.dataset.w = w; b.innerHTML = `<i style="height:${w}px"></i>`; b.title = w + 'px'; b.onclick = ()=>setWidth(w); $('widths').appendChild(b); });
+$('tLine').onclick = ()=>setTool('line'); $('tCurve').onclick = ()=>setTool('curve');
+$('bUndo').onclick = undo; $('bRedo').onclick = redo; $('bClear').onclick = clearAll;
+setTool('line'); setColor(color); setWidth(width);
+
+// ===== 직선 =====
+function finishLine(){
+  const d = draft;
+  if(!d.end || Math.hypot(d.end.x - d.start.x, d.end.y - d.start.y)*view.scale < 4){ draft = null; render(); return; }
+  commit({type:'line', points:[d.start, d.end], color, width});
 }
 
 // ===== 입력 =====
@@ -163,27 +207,43 @@ stage.addEventListener('mousedown', e=>{
   if(!view.img){ shakeHint(); return; }
   const {x,y} = pos(e);
   if(e.button === 1 || space){ e.preventDefault(); draft = {kind:'pan', sx:x, sy:y, ox:view.ox, oy:view.oy}; stage.classList.add('panning'); return; }
-  // [마우스다운]
+  if(e.button !== 0) return;
+  if(draft && draft.kind === 'line'){ draft.end = toImg(x,y); finishLine(); return; }   // 두 번째 클릭
+  // [마우스다운-곡선]
+  // [마우스다운-선택]
+  sel = -1;
+  if(tool === 'line') draft = {kind:'line', start:toImg(x,y), end:null, pressed:true, moved:false, sx:x, sy:y};
+  // [마우스다운-곡선시작]
+  render();
 });
 stage.addEventListener('mousemove', e=>{
   if(!draft) return;
   const {x,y} = pos(e);
   if(draft.kind === 'pan'){ view.ox = draft.ox + x - draft.sx; view.oy = draft.oy + y - draft.sy; render(); return; }
-  // [마우스무브]
+  if(draft.kind === 'line'){ draft.end = toImg(x,y); if(Math.hypot(x - draft.sx, y - draft.sy) > 4) draft.moved = true; render(); return; }
+  // [마우스무브-곡선]
+  // [마우스무브-끌기]
 });
 window.addEventListener('mouseup', e=>{
   if(!draft) return;
   if(draft.kind === 'pan'){ draft = null; stage.classList.remove('panning'); return; }
-  // [마우스업]
+  if(draft.kind === 'line' && draft.pressed){ draft.pressed = false; if(draft.moved) finishLine(); return; }
+  // [마우스업-끌기]
 });
 window.addEventListener('keydown', e=>{
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
   if(e.code === 'Space' && !e.repeat){ space = true; stage.classList.add('pan'); e.preventDefault(); return; }
-  // [단축키-수정자]
+  if(mod && k === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if(mod && k === 'y'){ e.preventDefault(); redo(); return; }
+  // [단축키-복사저장]
   if(mod) return;
   switch(e.key){
     case '0': fit(); break;
-    // [단축키]
+    case '1': setTool('line'); break;
+    case '2': setTool('curve'); break;
+    case 'Escape': if(draft){ draft = null; render(); } else if(sel >= 0){ sel = -1; render(); } break;
+    // [단축키-곡선]
+    // [단축키-삭제]
   }
 });
 window.addEventListener('keyup', e=>{ if(e.code === 'Space'){ space = false; stage.classList.remove('pan'); } });
@@ -192,7 +252,7 @@ window.addEventListener('resize', resize);
 resize(); updateButtons();
 
 // ===== 검증용 =====
-window.LineTool = { loadImage, get shapes(){ return shapes; }, view, get draft(){ return draft; } };
+window.LineTool = { loadImage, get shapes(){ return shapes; }, view, get draft(){ return draft; }, undo, redo };
 </script>
 </body>
 </html>
