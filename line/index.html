@@ -150,7 +150,7 @@ function render(){
   ctx.drawImage(view.img, view.ox, view.oy, view.img.width*view.scale, view.img.height*view.scale);
   drawShapes(ctx, shapes, toScr, 1);
   if(draft) drawDraft();
-  // [핸들]
+  if(sel >= 0 && shapes[sel]) drawHandles(shapes[sel]);
 }
 function ctrl(p, i){                       // i번째 구간의 베지어 제어점 2개 (Catmull-Rom)
   const p0 = p[i-1] || p[i], p1 = p[i], p2 = p[i+1], p3 = p[i+2] || p2;
@@ -185,6 +185,27 @@ function drawDraft(){
     if(pts.length >= 2) strokeShape(ctx, {type:'curve', points:pts, color, width}, toScr, 1);
     for(const p of draft.pts){ const q = toScr(p); ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); }
   }
+}
+function distSeg(p, a, b){
+  const dx = b.x - a.x, dy = b.y - a.y, l2 = dx*dx + dy*dy;
+  let t = l2 ? ((p.x - a.x)*dx + (p.y - a.y)*dy)/l2 : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - a.x - t*dx, p.y - a.y - t*dy);
+}
+function hitShape(sx, sy){                 // 위에 그린 것부터
+  for(let i=shapes.length-1;i>=0;i--){
+    const s = shapes[i], pts = s.points.map(toScr), poly = s.type === 'line' ? pts : flatten(pts);
+    for(let j=0;j<poly.length-1;j++) if(distSeg({x:sx,y:sy}, poly[j], poly[j+1]) <= s.width/2 + 8) return i;
+  }
+  return -1;
+}
+function hitHandle(sx, sy){
+  if(sel < 0) return -1;
+  const s = shapes[sel];
+  for(let j=0;j<s.points.length;j++){ const q = toScr(s.points[j]); if(Math.hypot(q.x - sx, q.y - sy) <= 9) return j; }
+  return -1;
+}
+function drawHandles(s){
+  for(const p of s.points){ const q = toScr(p); ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke(); }
 }
 function updateButtons(){
   $('bUndo').disabled = !undoStack.length;
@@ -235,10 +256,18 @@ stage.addEventListener('mousedown', e=>{
   if(!view.img){ shakeHint(); return; }
   const {x,y} = pos(e);
   if(e.button === 1 || space){ e.preventDefault(); draft = {kind:'pan', sx:x, sy:y, ox:view.ox, oy:view.oy}; stage.classList.add('panning'); return; }
+  if(e.button === 2){                      // 우클릭: 선택된 곡선의 점 하나 삭제
+    const h = hitHandle(x,y), s = shapes[sel];
+    if(h >= 0 && s && s.type === 'curve' && s.points.length > 2){ snapshot(); s.points.splice(h,1); render(); }
+    return;
+  }
   if(e.button !== 0) return;
   if(draft && draft.kind === 'line'){ draft.end = toImg(x,y); finishLine(); return; }   // 두 번째 클릭
   if(draft && draft.kind === 'curve'){ draft.pts.push(toImg(x,y)); render(); return; }
-  // [마우스다운-선택]
+  const h = hitHandle(x,y);
+  if(h >= 0){ snapshot(); draft = {kind:'drag', idx:sel, pt:h}; return; }
+  const hit = hitShape(x,y);
+  if(hit >= 0){ sel = hit; render(); return; }
   sel = -1;
   if(tool === 'line') draft = {kind:'line', start:toImg(x,y), end:null, pressed:true, moved:false, sx:x, sy:y};
   else draft = {kind:'curve', pts:[toImg(x,y)], cursor:null};
@@ -250,13 +279,13 @@ stage.addEventListener('mousemove', e=>{
   if(draft.kind === 'pan'){ view.ox = draft.ox + x - draft.sx; view.oy = draft.oy + y - draft.sy; render(); return; }
   if(draft.kind === 'line'){ draft.end = toImg(x,y); if(Math.hypot(x - draft.sx, y - draft.sy) > 4) draft.moved = true; render(); return; }
   if(draft.kind === 'curve'){ draft.cursor = toImg(x,y); render(); return; }
-  // [마우스무브-끌기]
+  if(draft.kind === 'drag'){ shapes[draft.idx].points[draft.pt] = toImg(x,y); render(); }
 });
 window.addEventListener('mouseup', e=>{
   if(!draft) return;
   if(draft.kind === 'pan'){ draft = null; stage.classList.remove('panning'); return; }
   if(draft.kind === 'line' && draft.pressed){ draft.pressed = false; if(draft.moved) finishLine(); return; }
-  // [마우스업-끌기]
+  if(draft.kind === 'drag'){ draft = null; render(); return; }
 });
 window.addEventListener('keydown', e=>{
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -271,7 +300,7 @@ window.addEventListener('keydown', e=>{
     case '2': setTool('curve'); break;
     case 'Escape': if(draft){ draft = null; render(); } else if(sel >= 0){ sel = -1; render(); } break;
     case 'Enter': if(draft && draft.kind === 'curve') finishCurve(); break;
-    // [단축키-삭제]
+    case 'Delete': case 'Backspace': if(sel >= 0){ snapshot(); shapes.splice(sel,1); sel = -1; render(); } break;
   }
 });
 window.addEventListener('keyup', e=>{ if(e.code === 'Space'){ space = false; stage.classList.remove('pan'); } });
