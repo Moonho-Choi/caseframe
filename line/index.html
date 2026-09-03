@@ -152,9 +152,20 @@ function render(){
   if(draft) drawDraft();
   // [핸들]
 }
-function splinePath(path, p){            // Task 3에서 Catmull-Rom으로 교체
+function ctrl(p, i){                       // i번째 구간의 베지어 제어점 2개 (Catmull-Rom)
+  const p0 = p[i-1] || p[i], p1 = p[i], p2 = p[i+1], p3 = p[i+2] || p2;
+  return [{x:p1.x + (p2.x - p0.x)/6, y:p1.y + (p2.y - p0.y)/6}, {x:p2.x - (p3.x - p1.x)/6, y:p2.y - (p3.y - p1.y)/6}];
+}
+function splinePath(path, p){
   path.moveTo(p[0].x, p[0].y);
-  for(let i=1;i<p.length;i++) path.lineTo(p[i].x, p[i].y);
+  for(let i=0;i<p.length-1;i++){ const [a,b] = ctrl(p,i); path.bezierCurveTo(a.x,a.y,b.x,b.y,p[i+1].x,p[i+1].y); }
+}
+function flatten(p){                       // 곡선을 꺾은선으로 (히트테스트용)
+  const out = [p[0]];
+  for(let i=0;i<p.length-1;i++){ const [a,b] = ctrl(p,i), p1 = p[i], p2 = p[i+1];
+    for(let t=1;t<=12;t++){ const u = t/12, v = 1-u;
+      out.push({ x:v*v*v*p1.x + 3*v*v*u*a.x + 3*v*u*u*b.x + u*u*u*p2.x, y:v*v*v*p1.y + 3*v*v*u*a.y + 3*v*u*u*b.y + u*u*u*p2.y }); } }
+  return out;
 }
 function strokeShape(c, s, map, k){       // map: 사진→목표 좌표, k: 굵기 배율
   const pts = s.points.map(map);
@@ -169,7 +180,11 @@ function strokeShape(c, s, map, k){       // map: 사진→목표 좌표, k: 굵
 function drawShapes(c, list, map, k){ for(const s of list) strokeShape(c, s, map, k); }
 function drawDraft(){
   if(draft.kind === 'line' && draft.end) strokeShape(ctx, {type:'line', points:[draft.start, draft.end], color, width}, toScr, 1);
-  // [초안-곡선]
+  else if(draft.kind === 'curve'){
+    const pts = draft.cursor ? [...draft.pts, draft.cursor] : draft.pts;
+    if(pts.length >= 2) strokeShape(ctx, {type:'curve', points:pts, color, width}, toScr, 1);
+    for(const p of draft.pts){ const q = toScr(p); ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  }
 }
 function updateButtons(){
   $('bUndo').disabled = !undoStack.length;
@@ -200,6 +215,19 @@ function finishLine(){
   commit({type:'line', points:[d.start, d.end], color, width});
 }
 
+// ===== 곡선 =====
+function finishCurve(){
+  const d = draft; if(!d || d.kind !== 'curve') return;
+  if(d.pts.length < 2){ draft = null; render(); return; }
+  commit({type:'curve', points:d.pts, color, width});
+}
+stage.addEventListener('dblclick', ()=>{
+  if(!draft || draft.kind !== 'curve') return;
+  const p = draft.pts;                     // 더블클릭으로 겹쳐 찍힌 점 제거
+  while(p.length >= 2 && Math.hypot(p[p.length-1].x - p[p.length-2].x, p[p.length-1].y - p[p.length-2].y)*view.scale < 4) p.pop();
+  finishCurve();
+});
+
 // ===== 입력 =====
 stage.addEventListener('wheel', e=>{ if(!view.img) return; e.preventDefault(); const {x,y} = pos(e); zoomAt(x, y, e.deltaY < 0 ? 1.15 : 1/1.15); }, {passive:false});
 stage.addEventListener('contextmenu', e=>e.preventDefault());
@@ -209,11 +237,11 @@ stage.addEventListener('mousedown', e=>{
   if(e.button === 1 || space){ e.preventDefault(); draft = {kind:'pan', sx:x, sy:y, ox:view.ox, oy:view.oy}; stage.classList.add('panning'); return; }
   if(e.button !== 0) return;
   if(draft && draft.kind === 'line'){ draft.end = toImg(x,y); finishLine(); return; }   // 두 번째 클릭
-  // [마우스다운-곡선]
+  if(draft && draft.kind === 'curve'){ draft.pts.push(toImg(x,y)); render(); return; }
   // [마우스다운-선택]
   sel = -1;
   if(tool === 'line') draft = {kind:'line', start:toImg(x,y), end:null, pressed:true, moved:false, sx:x, sy:y};
-  // [마우스다운-곡선시작]
+  else draft = {kind:'curve', pts:[toImg(x,y)], cursor:null};
   render();
 });
 stage.addEventListener('mousemove', e=>{
@@ -221,7 +249,7 @@ stage.addEventListener('mousemove', e=>{
   const {x,y} = pos(e);
   if(draft.kind === 'pan'){ view.ox = draft.ox + x - draft.sx; view.oy = draft.oy + y - draft.sy; render(); return; }
   if(draft.kind === 'line'){ draft.end = toImg(x,y); if(Math.hypot(x - draft.sx, y - draft.sy) > 4) draft.moved = true; render(); return; }
-  // [마우스무브-곡선]
+  if(draft.kind === 'curve'){ draft.cursor = toImg(x,y); render(); return; }
   // [마우스무브-끌기]
 });
 window.addEventListener('mouseup', e=>{
@@ -242,7 +270,7 @@ window.addEventListener('keydown', e=>{
     case '1': setTool('line'); break;
     case '2': setTool('curve'); break;
     case 'Escape': if(draft){ draft = null; render(); } else if(sel >= 0){ sel = -1; render(); } break;
-    // [단축키-곡선]
+    case 'Enter': if(draft && draft.kind === 'curve') finishCurve(); break;
     // [단축키-삭제]
   }
 });
