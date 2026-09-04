@@ -55,18 +55,48 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .btn.on,.btn.tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
 .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 
-.sw{width:22px;height:22px;border-radius:50%;padding:0!important;border:2px solid rgba(0,0,0,.4);flex:none}
-.sw.on{outline:2px solid #fff;outline-offset:2px}
-.wd{display:flex;align-items:center;justify-content:center;width:34px;min-height:34px;padding:0;border-radius:10px;flex:none}
-.wd:hover{background:rgba(255,255,255,.06)}
-.wd i{display:block;background:var(--text);border-radius:2px;width:18px}
-.wd.on{background:var(--accent)}
-.wd.on i{background:#06231D}
 .privacy-note{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10.5px;flex:none}
+
+/* ── 작업 영역: 왼쪽 도구 레일 + 무대 + 오른쪽 패널 (CaseFrame과 같은 문법) ── */
+.workspace{flex:1;min-height:0;display:flex}
+.toolrail{
+  flex:none;width:58px;display:flex;flex-direction:column;gap:8px;align-items:center;
+  padding:12px 0;border-right:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+}
+.toolrail .tool{
+  width:46px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  border:1px solid transparent;border-radius:12px;color:var(--muted);font-size:9.5px;
+}
+.toolrail .tool svg{width:19px;height:19px}
+.toolrail .tool:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.toolrail .tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
+.inspector{
+  flex:none;width:224px;overflow-y:auto;
+  border-left:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+}
+.inspector-head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.inspector-head h2{margin:0 0 4px;font-size:15px}
+.inspector-head p{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
+.control-section{padding:12px 16px;border-bottom:1px solid var(--line)}
+.control-section h3{margin:0 0 9px;font-size:11.5px;color:#c7d2dc;letter-spacing:.02em}
+.control-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-size:11.5px;color:var(--muted)}
+.control-title .value{color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.color-chips{display:flex;flex-wrap:wrap;gap:7px}
+.sw{width:24px;height:24px;border-radius:50%;padding:0!important;border:2px solid rgba(0,0,0,.4);flex:none}
+.sw.on{outline:2px solid #fff;outline-offset:2px}
+.sw-input{
+  width:24px;height:24px;border-radius:50%;border:2px dashed #7b8794;padding:0;cursor:pointer;flex:none;
+  background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);-webkit-appearance:none;appearance:none;overflow:hidden;
+}
+.sw-input::-webkit-color-swatch-wrapper{padding:0;opacity:0}
+.sw-input.on{outline:2px solid #fff;outline-offset:2px;border-style:solid}
+.btn.danger{width:100%;color:#ffd5dc;border-color:#583241;background:#2b1820}
+.hint{color:var(--muted);font-size:10.5px;line-height:1.7}
 .privacy-note svg{width:12px;height:12px;flex:none;opacity:.85}
 
 /* ── 무대 + 종이 프레임 ── */
-#stage{position:relative;flex:1;min-height:0;cursor:crosshair;overflow:hidden}
+#stage{position:relative;flex:1;min-width:0;min-height:0;cursor:crosshair;overflow:hidden}
 #stage.pan{cursor:grab}#stage.panning{cursor:grabbing}
 canvas{display:block}
 .sheet-empty{
@@ -115,7 +145,7 @@ canvas{display:block}
 /* ── 기타 ── */
 .sitebar{flex:none;padding:6px 14px;color:#6d7d8e;font-size:10.5px;border-top:1px solid rgba(255,255,255,.05)}
 .sitebar a{color:#8fa0b0}
-body.fs .topbar,body.fs .filmstrip,body.fs .sitebar{display:none}
+body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .toolrail,body.fs .inspector{display:none}
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
   background:#000c;color:#fff;padding:10px 18px;border-radius:8px;
@@ -128,28 +158,31 @@ body.drag #drop{display:block}
   .brand small,.privacy-note{display:none}
   .filmstrip{grid-template-columns:1fr}
   .film-info{border-right:0;padding:10px 14px 0}
+  .workspace{flex-direction:column}
+  .toolrail{flex-direction:row;width:auto;padding:6px 10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .toolrail .tool{flex-direction:row;width:auto;padding:6px 12px;gap:6px;font-size:11px}
+  .inspector{width:auto;max-height:190px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
 }
 </style>
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" id="brandHome" role="button" tabindex="0" title="CaseFrame으로 돌아가기">
+  <div class="brand" id="brandHome" role="button" tabindex="0" title="CaseFrame 초기 화면으로">
     <div class="brand-mark">
       <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
         <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#brandGrad)"/>
-        <path d="M14 46 C 24 20, 36 48, 50 22" stroke="#06231D" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        <g fill="#06231D">
+          <path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/>
+          <path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/>
+          <path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/>
+          <path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/>
+          <rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/>
+        </g>
         <defs><linearGradient id="brandGrad" x1="2" y1="2" x2="62" y2="62"><stop stop-color="#4ADBC3"/><stop offset="1" stop-color="#1E9B84"/></linearGradient></defs>
       </svg>
     </div>
-    <div><b>선그리기 전용</b><small>CaseFrame 도구</small></div>
+    <div><b>CaseFrame</b><small>선그리기 도구 · 로고를 누르면 처음으로</small></div>
   </div>
-  <span class="sep"></span>
-  <button class="btn tool" id="tLine" title="직선 (1)">직선</button>
-  <button class="btn tool" id="tCurve" title="곡선 (2)">곡선</button>
-  <span class="sep"></span>
-  <span id="colors" style="display:flex;gap:6px;align-items:center"></span>
-  <span class="sep"></span>
-  <span id="widths" style="display:flex;gap:2px;align-items:center"></span>
   <span class="sep"></span>
   <button class="btn ghost" id="bUndo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
   <button class="btn ghost" id="bRedo" title="다시 실행 (Ctrl+Y)">다시 실행</button>
@@ -163,16 +196,60 @@ body.drag #drop{display:block}
   <button class="btn primary" id="bSave" title="저장 (Ctrl+S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 저장</button>
 </header>
 
-<section id="stage">
-  <canvas id="cv"></canvas>
-  <div class="sheet-empty" id="emptySheet">
-    <div class="slot">
-      <div>
-        <b>캡처한 화면을 붙여넣으세요 (Ctrl+V)</b>
-        <span>아래 칸의 사진을 클릭하거나 끌어올려도 들어갑니다.<br>직선(1)·곡선(2)을 그린 뒤 복사해 차트나 PPT에 붙여넣으세요.</span>
+<section class="workspace">
+  <nav class="toolrail" aria-label="그리기 도구">
+    <button class="tool" id="tLine" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg>
+      직선
+    </button>
+    <button class="tool" id="tCurve" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17 C 8 5, 14 21, 21 7"/></svg>
+      곡선
+    </button>
+  </nav>
+
+  <section id="stage">
+    <canvas id="cv"></canvas>
+    <div class="sheet-empty" id="emptySheet">
+      <div class="slot">
+        <div>
+          <b>캡처한 화면을 붙여넣으세요 (Ctrl+V)</b>
+          <span>아래 칸의 사진을 클릭하거나 끌어올려도 들어갑니다.<br>직선(1)은 클릭으로 꺾고 더블클릭으로 끝, 곡선(2)은 점을 찍고 더블클릭.<br>그린 뒤 복사해 차트나 PPT에 붙여넣으세요.</span>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
+
+  <aside class="inspector">
+    <div class="inspector-head">
+      <h2>선 미세 조정</h2>
+      <p id="selInfo">선을 클릭하면 색·굵기를 바꿀 수 있습니다</p>
+    </div>
+    <div class="control-section">
+      <h3>색상</h3>
+      <div class="color-chips" id="colorChips">
+        <input type="color" id="colorCustom" class="sw-input" value="#ff2d2d" title="직접 선택">
+      </div>
+    </div>
+    <div class="control-section">
+      <h3>굵기</h3>
+      <div class="control-title"><span>선 굵기</span><span class="value" id="widthValue">4px</span></div>
+      <input id="widthRange" type="range" min="1" max="20" step="1" value="4">
+    </div>
+    <div class="control-section">
+      <button class="btn danger" id="bDelSel" title="선택한 선 삭제 (Delete)">선택한 선 삭제</button>
+    </div>
+    <div class="control-section">
+      <h3>사용 안내</h3>
+      <div class="hint">
+        직선(1): 클릭할 때마다 꺾이고, 더블클릭이나 Enter로 끝냅니다.<br>
+        곡선(2): 점을 찍고 더블클릭으로 완성합니다.<br>
+        그린 선을 클릭해 선택하면 점을 끌어 고치고, 점 우클릭으로 지웁니다.<br>
+        휠 확대·축소 · Space+드래그 이동 · 0 맞춤 · F 전체화면.<br>
+        Ctrl+C 복사 · Ctrl+S 저장 · Ctrl+Z 되돌리기.
+      </div>
+    </div>
+  </aside>
 </section>
 
 <section class="filmstrip">
@@ -205,8 +282,7 @@ let space = false;
 const undoStack = [], redoStack = [];
 const assets = [];      // {name, img}
 let pasteCount = 0;
-const COLORS = ['#ff2d2d','#ffd21f','#3ddc5a','#3b8bff','#ffffff'];
-const WIDTHS = [2,4,7];
+const COLORS = ['#ff2d2d','#ff8a1f','#ffd21f','#3ddc5a','#35c7b0','#3b8bff','#8b5cf6','#ff5fa2','#ffffff','#000000'];
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), cv = $('cv'), ctx = cv.getContext('2d');
@@ -333,6 +409,20 @@ function render(){
   drawShapes(ctx, shapes, toScr, 1);
   if(draft) drawDraft();
   if(sel >= 0 && shapes[sel]) drawHandles(shapes[sel]);
+  updateSelInfo();
+}
+function syncPanel(){                      // 선택한 선의 색·굵기를 오른쪽 패널에 반영
+  const s = shapes[sel]; if(!s) return;
+  color = s.color; width = s.width;
+  refreshColorUI(); refreshWidthUI();
+}
+function updateSelInfo(){
+  const el = $('selInfo'); if(!el) return;
+  let t;
+  if(draft && (draft.kind === 'line' || draft.kind === 'curve')) t = (draft.kind === 'line' ? '직선' : '곡선') + ' 그리는 중 — 더블클릭으로 끝';
+  else if(sel >= 0 && shapes[sel]) t = (shapes[sel].type === 'line' ? '직선' : '곡선') + ' 선택됨 — 색·굵기 변경, 점 끌어 수정';
+  else t = '선을 클릭하면 색·굵기를 바꿀 수 있습니다';
+  if(el.textContent !== t) el.textContent = t;
 }
 function ctrl(p, i){                       // i번째 구간의 베지어 제어점 2개 (Catmull-Rom)
   const p0 = p[i-1] || p[i], p1 = p[i], p2 = p[i+1], p3 = p[i+2] || p2;
@@ -354,19 +444,17 @@ function strokeShape(c, s, map, k){        // map: 사진→목표 좌표, k: �
   if(pts.length < 2) return;
   c.lineCap = 'round'; c.lineJoin = 'round';
   const path = new Path2D();
-  if(s.type === 'line'){ path.moveTo(pts[0].x, pts[0].y); path.lineTo(pts[1].x, pts[1].y); }
+  if(s.type === 'line'){ path.moveTo(pts[0].x, pts[0].y); for(let i=1;i<pts.length;i++) path.lineTo(pts[i].x, pts[i].y); }
   else splinePath(path, pts);
   c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = (s.width + 3)*k; c.stroke(path);
   c.strokeStyle = s.color; c.lineWidth = s.width*k; c.stroke(path);
 }
 function drawShapes(c, list, map, k){ for(const s of list) strokeShape(c, s, map, k); }
 function drawDraft(){
-  if(draft.kind === 'line' && draft.end) strokeShape(ctx, {type:'line', points:[draft.start, draft.end], color, width}, toScr, 1);
-  else if(draft.kind === 'curve'){
-    const pts = draft.cursor ? [...draft.pts, draft.cursor] : draft.pts;
-    if(pts.length >= 2) strokeShape(ctx, {type:'curve', points:pts, color, width}, toScr, 1);
-    for(const p of draft.pts){ const q = toScr(p); ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); }
-  }
+  if(draft.kind !== 'line' && draft.kind !== 'curve') return;
+  const pts = draft.cursor ? [...draft.pts, draft.cursor] : draft.pts;
+  if(pts.length >= 2) strokeShape(ctx, {type:draft.kind, points:pts, color, width}, toScr, 1);
+  for(const p of draft.pts){ const q = toScr(p); ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); }
 }
 function distSeg(p, a, b){
   const dx = b.x - a.x, dy = b.y - a.y, l2 = dx*dx + dy*dy;
@@ -403,33 +491,34 @@ function clearAll(){ if(!shapes.length) return; if(!confirm('그린 선을 모�
 
 // ===== 도구·색·굵기 =====
 function setTool(t){ tool = t; if(draft && (draft.kind === 'line' || draft.kind === 'curve')) draft = null; $('tLine').classList.toggle('on', t === 'line'); $('tCurve').classList.toggle('on', t === 'curve'); render(); }
-function setColor(c){ color = c; [...$('colors').children].forEach(b=>b.classList.toggle('on', b.dataset.c === c)); if(sel >= 0){ snapshot(); shapes[sel].color = c; render(); } }
-function setWidth(w){ width = w; [...$('widths').children].forEach(b=>b.classList.toggle('on', +b.dataset.w === w)); if(sel >= 0){ snapshot(); shapes[sel].width = w; render(); } }
-COLORS.forEach(c=>{ const b = document.createElement('button'); b.className = 'sw'; b.dataset.c = c; b.style.background = c; b.title = c; b.onclick = ()=>setColor(c); $('colors').appendChild(b); });
-WIDTHS.forEach(w=>{ const b = document.createElement('button'); b.className = 'wd'; b.dataset.w = w; b.innerHTML = `<i style="height:${w}px"></i>`; b.title = w + 'px'; b.onclick = ()=>setWidth(w); $('widths').appendChild(b); });
+function refreshColorUI(){
+  [...$('colorChips').querySelectorAll('.sw')].forEach(b=>b.classList.toggle('on', b.dataset.c === color));
+  const cu = $('colorCustom'), preset = COLORS.includes(color);
+  cu.classList.toggle('on', !preset); if(!preset) cu.value = color;
+}
+function refreshWidthUI(){ $('widthRange').value = width; $('widthValue').textContent = width + 'px'; }
+function setColor(c, snap = true){ color = c; refreshColorUI(); if(sel >= 0){ if(snap) snapshot(); shapes[sel].color = c; render(); } }
+function setWidth(w, snap = true){ width = Math.min(20, Math.max(1, Math.round(w))); refreshWidthUI(); if(sel >= 0){ if(snap) snapshot(); shapes[sel].width = width; render(); } }
+COLORS.forEach(c=>{ const b = document.createElement('button'); b.className = 'sw'; b.dataset.c = c; b.style.background = c; b.title = c; b.onclick = ()=>setColor(c); $('colorChips').insertBefore(b, $('colorCustom')); });
+// 슬라이더·컬러 피커는 누르는 순간 한 번만 스냅샷을 남기고, 움직이는 동안은 바로 반영
+$('colorCustom').addEventListener('pointerdown', ()=>{ if(sel >= 0) snapshot(); });
+$('colorCustom').addEventListener('input', e=>setColor(e.target.value, false));
+$('widthRange').addEventListener('pointerdown', ()=>{ if(sel >= 0) snapshot(); });
+$('widthRange').addEventListener('input', e=>setWidth(+e.target.value, false));
 $('tLine').onclick = ()=>setTool('line'); $('tCurve').onclick = ()=>setTool('curve');
 $('bUndo').onclick = undo; $('bRedo').onclick = redo; $('bClear').onclick = clearAll;
+$('bDelSel').onclick = ()=>{ if(sel < 0){ toast('먼저 그린 선을 클릭해 선택하세요'); return; } snapshot(); shapes.splice(sel,1); sel = -1; render(); };
 setTool('line'); setColor(color); setWidth(width);
 
-// ===== 직선 =====
-function finishLine(){
-  const d = draft;
-  if(!d.end || Math.hypot(d.end.x - d.start.x, d.end.y - d.start.y)*view.scale < 4){ draft = null; render(); return; }
-  commit({type:'line', points:[d.start, d.end], color, width});
-}
-
-// ===== 곡선 =====
-function finishCurve(){
-  const d = draft; if(!d || d.kind !== 'curve') return;
-  if(d.pts.length < 2){ draft = null; render(); return; }
-  commit({type:'curve', points:d.pts, color, width});
-}
-stage.addEventListener('dblclick', ()=>{
-  if(!draft || draft.kind !== 'curve') return;
-  const p = draft.pts;                     // 더블클릭으로 겹쳐 찍힌 점 제거
+// ===== 그리기 완료 (직선·곡선 공통) =====
+function finishShape(){
+  const d = draft; if(!d || (d.kind !== 'line' && d.kind !== 'curve')) return;
+  const p = d.pts;                         // 더블클릭으로 겹쳐 찍힌 점 제거
   while(p.length >= 2 && Math.hypot(p[p.length-1].x - p[p.length-2].x, p[p.length-1].y - p[p.length-2].y)*view.scale < 4) p.pop();
-  finishCurve();
-});
+  if(p.length < 2){ draft = null; render(); return; }
+  commit({type:d.kind, points:p, color, width});
+}
+stage.addEventListener('dblclick', finishShape);
 
 // ===== 입력 =====
 stage.addEventListener('wheel', e=>{ if(!view.img) return; e.preventDefault(); const {x,y} = pos(e); zoomAt(x, y, e.deltaY < 0 ? 1.15 : 1/1.15); }, {passive:false});
@@ -438,36 +527,37 @@ stage.addEventListener('mousedown', e=>{
   if(!view.img){ shakeHint(); return; }
   const {x,y} = pos(e);
   if(e.button === 1 || space){ e.preventDefault(); draft = {kind:'pan', sx:x, sy:y, ox:view.ox, oy:view.oy}; stage.classList.add('panning'); return; }
-  if(e.button === 2){                      // 우클릭: 선택된 곡선의 점 하나 삭제
+  if(e.button === 2){                      // 우클릭: 선택된 선의 점 하나 삭제
     const h = hitHandle(x,y), s = shapes[sel];
-    if(h >= 0 && s && s.type === 'curve' && s.points.length > 2){ snapshot(); s.points.splice(h,1); render(); }
+    if(h >= 0 && s && s.points.length > 2){ snapshot(); s.points.splice(h,1); render(); }
     return;
   }
   if(e.button !== 0) return;
-  if(draft && draft.kind === 'line'){ draft.end = toImg(x,y); finishLine(); return; }   // 두 번째 클릭
-  if(draft && draft.kind === 'curve'){ draft.pts.push(toImg(x,y)); render(); return; }
+  if(draft && (draft.kind === 'line' || draft.kind === 'curve')){ draft.pts.push(toImg(x,y)); draft.px = x; draft.py = y; render(); return; }
   const h = hitHandle(x,y);
   if(h >= 0){ snapshot(); draft = {kind:'drag', idx:sel, pt:h}; return; }
   const hit = hitShape(x,y);
-  if(hit >= 0){ sel = hit; render(); return; }
+  if(hit >= 0){ sel = hit; syncPanel(); render(); return; }
   sel = -1;
-  if(tool === 'line') draft = {kind:'line', start:toImg(x,y), end:null, pressed:true, moved:false, sx:x, sy:y};
-  else draft = {kind:'curve', pts:[toImg(x,y)], cursor:null};
+  draft = {kind:tool, pts:[toImg(x,y)], cursor:null, px:x, py:y};
   render();
 });
 stage.addEventListener('mousemove', e=>{
   if(!draft) return;
   const {x,y} = pos(e);
   if(draft.kind === 'pan'){ view.ox = draft.ox + x - draft.sx; view.oy = draft.oy + y - draft.sy; render(); return; }
-  if(draft.kind === 'line'){ draft.end = toImg(x,y); if(Math.hypot(x - draft.sx, y - draft.sy) > 4) draft.moved = true; render(); return; }
-  if(draft.kind === 'curve'){ draft.cursor = toImg(x,y); render(); return; }
+  if(draft.kind === 'line' || draft.kind === 'curve'){ draft.cursor = toImg(x,y); render(); return; }
   if(draft.kind === 'drag'){ shapes[draft.idx].points[draft.pt] = toImg(x,y); render(); }
 });
 window.addEventListener('mouseup', e=>{
   if(!draft) return;
   if(draft.kind === 'pan'){ draft = null; stage.classList.remove('panning'); return; }
-  if(draft.kind === 'line' && draft.pressed){ draft.pressed = false; if(draft.moved) finishLine(); return; }
   if(draft.kind === 'drag'){ draft = null; render(); return; }
+  if((draft.kind === 'line' || draft.kind === 'curve') && draft.px != null){
+    const {x,y} = pos(e);                  // 끌어서 그었다면 놓은 자리에도 점을 찍는다
+    if(Math.hypot(x - draft.px, y - draft.py) > 4){ draft.pts.push(toImg(x,y)); render(); }
+    draft.px = null;
+  }
 });
 window.addEventListener('keydown', e=>{
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -483,7 +573,7 @@ window.addEventListener('keydown', e=>{
     case '1': setTool('line'); break;
     case '2': setTool('curve'); break;
     case 'Escape': if(draft){ draft = null; render(); } else if(sel >= 0){ sel = -1; render(); } break;
-    case 'Enter': if(draft && draft.kind === 'curve') finishCurve(); break;
+    case 'Enter': finishShape(); break;
     case 'Delete': case 'Backspace': if(sel >= 0){ snapshot(); shapes.splice(sel,1); sel = -1; render(); } break;
   }
 });
