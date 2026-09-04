@@ -446,7 +446,6 @@ function strokeShape(c, s, map, k){        // map: 사진→목표 좌표, k: �
   const path = new Path2D();
   if(s.type === 'line'){ path.moveTo(pts[0].x, pts[0].y); for(let i=1;i<pts.length;i++) path.lineTo(pts[i].x, pts[i].y); }
   else splinePath(path, pts);
-  c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = (s.width + 3)*k; c.stroke(path);
   c.strokeStyle = s.color; c.lineWidth = s.width*k; c.stroke(path);
 }
 function drawShapes(c, list, map, k){ for(const s of list) strokeShape(c, s, map, k); }
