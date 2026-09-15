@@ -1111,12 +1111,22 @@
       border-radius: 20px;
     }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
-    /* 사진 보정(밝기·대비)은 빛 조절이라 따뜻한 주황으로 구분한다 */
-    .adjust-controls input[type="range"] { accent-color: #f2a65a; }
+    /* 사진 보정: 밝기=은색, 대비=코랄 */
+    #brightness { accent-color: #cfd8e0; }
+    #contrast { accent-color: #f2705f; }
+    /* 확대/축소=하늘색, 회전=로즈 — 같은 구역의 두 막대가 색으로 바로 구분되게 */
+    #zoom { accent-color: #56b8ec; }
+    /* 미세 회전: 0도(가운데)를 기준으로 기운 쪽으로만 분홍이 뻗는다. 색 띠는 JS가 값에 맞춰 그린다 */
+    #rotate { -webkit-appearance: none; appearance: none; height: 14px; background: transparent; }
+    #rotate::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--rotate-track, rgba(255, 255, 255, .22)); }
+    #rotate::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #ec7fa8; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); cursor: pointer; }
+    #rotate::-moz-range-track { height: 4px; border-radius: 2px; background: var(--rotate-track, rgba(255, 255, 255, .22)); }
+    #rotate::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: #ec7fa8; cursor: pointer; }
 
-    .segmented { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .segmented { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 6px; }
     .segmented .btn { padding: 0 5px; font-size: 12px; }
-    .segmented .wide { grid-column: 1 / -1; }
+    /* 90도 회전: 미세 회전 막대 아래, 줄의 약 6할 폭으로 가운데 배치 */
+    #rotateRight { display: flex; width: 62%; margin: 0 auto 16px; font-size: 12px; }
 
     /* 기능별 색 구분: 반전=파랑, 90도 회전=민트, 크기 조절=무채색 그대로 */
     .btn.tint-blue {
@@ -1646,13 +1656,13 @@
             <input id="zoom" type="range" min="50" max="300" value="100">
           </div>
           <div class="control">
-            <div class="control-title"><span>회전</span><span class="value" id="rotateValue">0.0°</span></div>
+            <div class="control-title"><span>미세 회전</span><span class="value" id="rotateValue">0.0°</span></div>
             <input id="rotate" type="range" min="-15" max="15" step="0.1" value="0">
           </div>
+          <button class="btn tint-mint" id="rotateRight">↻ 90° 회전</button>
           <div class="segmented">
             <button class="btn tint-blue" id="flipX">↔ 좌우</button>
             <button class="btn tint-blue" id="flipY">↕ 상하</button>
-            <button class="btn tint-mint wide" id="rotateRight">↻ 90° 회전</button>
             <button class="btn" id="fit">원본 맞춤</button>
             <button class="btn" id="fillFit">꽉 채움</button>
           </div>
@@ -1662,7 +1672,7 @@
           <label class="check"><input type="checkbox" id="exportLabels" checked> 이름표(UPPER 등)를 저장 이미지에 포함</label>
           <p class="control-note">체크를 끄면 화면에서 이름표가 흐려지고, 저장 이미지에서는 빠집니다.</p>
         </div>
-        <div class="control-section photo-controls adjust-controls">
+        <div class="control-section photo-controls">
           <h3>사진 보정</h3>
           <div class="control">
             <div class="control-title"><span>밝기</span><span class="value" id="brightnessValue">100</span></div>
@@ -3079,6 +3089,19 @@
       input.addEventListener('change', () => { input._touched = false; });
     });
 
+    // 미세 회전 막대의 색 띠: 가운데(0도)부터 손잡이까지만 분홍으로 칠한다
+    function updateRotateTrack() {
+      const input = document.getElementById('rotate');
+      const min = Number(input.min), max = Number(input.max);
+      const p = (Number(input.value) - min) / (max - min) * 100;
+      const base = 'rgba(255, 255, 255, .22)';
+      const from = Math.min(50, p), to = Math.max(50, p);
+      input.style.setProperty('--rotate-track',
+        `linear-gradient(to right, ${base} 0% ${from}%, #ec7fa8 ${from}% ${to}%, ${base} ${to}% 100%)`);
+    }
+    document.getElementById('rotate').addEventListener('input', updateRotateTrack);
+    updateRotateTrack();
+
     document.getElementById('fontSize').addEventListener('input', event => {
       if (!selectedTextBox) return;
       const value = Number(event.target.value);
@@ -3137,6 +3160,7 @@
       // 패널 좌우/상하 버튼에도 반전 여부를 표시한다
       document.getElementById('flipX').classList.toggle('on', state.flipX === -1);
       document.getElementById('flipY').classList.toggle('on', state.flipY === -1);
+      updateRotateTrack();
     }
 
     document.getElementById('flipX').addEventListener('click', () => { pushHistory(); currentState().flipX *= -1; renderSlot(selectedSlot); syncControls(); });
