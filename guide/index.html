@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="이음턱편한치과 턱관절 초진 안내지 검수용 시제품">
+  <title>진료 후 안내 · 이음턱편한치과</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d4d72'/%3E%3Cpath d='M9 8v16m7-16v16m7-16v16M9 16h14' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="guide-content.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="app-header no-print">
+    <a class="brand" href="./" aria-label="안내지 처음 화면"><span class="brand-mark" aria-hidden="true">이음</span><span>이음턱편한치과<small>진료 후 안내</small></span></a>
+    <span class="prototype-label">원장 검수용 시제품</span>
+  </header>
+  <main class="workspace">
+    <section class="editor no-print" aria-labelledby="editor-title">
+      <div class="section-eyebrow">01 · 안내 내용 선택</div>
+      <h1 id="editor-title">턱관절 초진 후 안내</h1>
+      <p class="intro">오늘 설명한 항목을 선택하세요. <br>선택한 문구가 안내지에 그대로 들어갑니다.</p>
+      <div class="draft-note"><strong>아직 검수 전 문구입니다.</strong><span>지금은 구성과 인쇄를 시험해 보세요. <br>출력물에도 ‘검수용 초안’이 표시됩니다.</span></div>
+      <fieldset class="options"><legend>안내지에 포함할 내용</legend><div id="guide-options"></div></fieldset>
+      <div class="appointment">
+        <label for="next-visit">다음 예약일 <span>선택 사항</span></label>
+        <input id="next-visit" type="date">
+      </div>
+      <details class="source-notes"><summary>문구의 참고 자료</summary><p>공식 환자 안내를 참고해 작성한 한국어 초안입니다. 우리 치과의 확정 안내문은 아닙니다.</p><a href="https://www.nidcr.nih.gov/health-info/tmd" target="_blank" rel="noopener noreferrer">NIDCR · 턱관절장애 안내</a><a href="https://www.nhs.uk/conditions/temporomandibular-disorder-tmd/" target="_blank" rel="noopener noreferrer">NHS · 턱관절장애 자가관리</a><small>자료 확인: 2026.09.15</small></details>
+    </section>
+    <section class="preview" aria-labelledby="preview-title">
+      <div class="preview-toolbar no-print"><div><span class="section-eyebrow">02 · 안내지 미리보기</span><p id="selection-status" role="status" aria-live="polite"></p></div><button id="print-button" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 8V3h10v5M7 17H4V9h16v8h-3M7 14h10v7H7z"/><path d="M17 11h1"/></svg>검수용 인쇄</button></div>
+      <article class="paper" id="guide-paper">
+        <header class="paper-header"><span class="paper-clinic">이음턱편한치과</span><span class="paper-series">진료 후 생활 안내</span></header>
+        <div class="paper-title"><span class="paper-kicker">턱관절 초진</span><h2 id="preview-title">오늘의 설명을 <br>집에서도 기억하세요.</h2><p>오늘 선택한 관리 내용을 한 장에 담았습니다.</p></div>
+        <div class="paper-draft">검수용 초안 · 환자 배포 전 원장 확인 필요</div>
+        <div id="guide-sections"></div>
+        <p class="empty-state" id="empty-state" hidden>왼쪽에서 안내할 항목을 선택하세요.</p>
+        <aside class="contact-note"><h3>이럴 때는 진료를 받으세요</h3><p>턱이 잠기거나 음식·물을 섭취하기 어려우면 예약일까지 기다리지 말고 의료기관에 연락해 진료를 받으세요.</p></aside>
+        <section class="follow-up"><h3>다음 진료에서 함께 확인해요</h3><p>통증이나 씹을 때의 불편감이 어떻게 달라졌는지 말씀해 주세요.</p><div class="next-visit-line">다음 예약 <strong id="printed-next-visit">진료실에서 안내받은 일정을 확인해 주세요.</strong></div></section>
+        <footer class="paper-footer"><span>개별 관리 방법은 진찰 결과에 따라 달라질 수 있습니다.</span><span>검수용 v0.1</span></footer>
+      </article>
+      <p class="print-tip no-print">A4 세로 · 배율 100% · 브라우저의 머리글과 바닥글을 끄면 깔끔하게 출력됩니다.<br>인쇄 창에서 ‘PDF로 저장’을 선택할 수도 있습니다.</p>
+    </section>
+  </main>
+  <footer class="app-footer no-print">이 시제품은 환자 이름과 차트번호를 입력받지 않습니다. 선택 내용은 새로고침하면 초기화됩니다.</footer>
+</body>
+</html>
