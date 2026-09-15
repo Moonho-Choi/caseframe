@@ -831,6 +831,7 @@
     .slot-flip svg { width: 15px; height: 15px; }
     .slot-flip.flip-x { left: 8px; }
     .slot-flip.flip-y { left: 41px; }
+    .slot-flip.rotate-r { left: 74px; }
     .photo-slot.has-image .slot-flip { display: grid; place-items: center; }
     .slot-flip:hover { background: rgba(53, 199, 176, .92); color: #06231D; border-color: transparent; }
 
@@ -1634,6 +1635,8 @@
           <div class="segmented">
             <button class="btn" id="flipX">↔ 좌우</button>
             <button class="btn" id="flipY">↕ 상하</button>
+            <button class="btn" id="rotateLeft">↺ 90°</button>
+            <button class="btn" id="rotateRight">↻ 90°</button>
             <button class="btn" id="fit">원본 맞춤</button>
             <button class="btn" id="fillFit">꽉 채움</button>
           </div>
@@ -1741,7 +1744,7 @@
       <h3>주요 기능</h3>
       <ul>
         <li>상악·하악·정면·좌측·우측 <strong>십자 5장 배치</strong>와 전후 비교(BEFORE/AFTER)용 좌우·위아래 배치, 2×2·3×2·3×3 격자</li>
-        <li>사진별 확대·이동·회전·<strong>좌우/상하 반전</strong>(미러 촬영 보정)·밝기·대비 조정</li>
+        <li>사진별 확대·이동·회전·<strong>90도 회전</strong>(눕은 사진 보정)·<strong>좌우/상하 반전</strong>(미러 촬영 보정)·밝기·대비 조정</li>
         <li>환자 정보·진단·메모 텍스트 칸과 자유 글상자, 병원 로고 넣기</li>
         <li>PNG/JPG 저장과 <strong>클립보드 복사</strong> — 전자차트나 PPT에 바로 붙여넣기</li>
         <li>AI 배경 지우기(베타), 실행 취소, 배치 구성 기억</li>
@@ -2613,6 +2616,19 @@
       makeFlipButton('flip-x', '좌우 반전', 'flipX', '<path d="M12 4v16"/><path d="M8 8 4 12l4 4"/><path d="m16 8 4 4-4 4"/>');
       makeFlipButton('flip-y', '상하 반전', 'flipY', '<path d="M4 12h16"/><path d="M8 8l4-4 4 4"/><path d="m8 16 4 4 4-4"/>');
 
+      // 90도 눕혀 저장된 사진 보정용 회전 버튼 — 누를 때마다 오른쪽으로 90도 돈다
+      const rotateBtn = document.createElement('button');
+      rotateBtn.className = 'slot-flip rotate-r';
+      rotateBtn.title = '오른쪽으로 90도 회전 (눕은 사진 보정)';
+      rotateBtn.setAttribute('aria-label', `${slotDisplayName(slot)} 오른쪽으로 90도 회전`);
+      rotateBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v6h-6"/><path d="M19.49 15a8 8 0 1 1-1.88-8.36L21 10"/></svg>';
+      rotateBtn.addEventListener('click', event => {
+        event.stopPropagation();
+        selectSlot(slot);
+        rotatePhoto90(slot, 1);
+      });
+      slot.appendChild(rotateBtn);
+
       slot.addEventListener('click', event => {
         selectSlot(slot);
         if (event.target.classList.contains('slot-add')) chooseForSlot(slot);
@@ -3109,6 +3125,29 @@
 
     document.getElementById('flipX').addEventListener('click', () => { pushHistory(); currentState().flipX *= -1; renderSlot(selectedSlot); syncControls(); });
     document.getElementById('flipY').addEventListener('click', () => { pushHistory(); currentState().flipY *= -1; renderSlot(selectedSlot); syncControls(); });
+
+    // 90도 눕혀 저장된 사진 보정: 사진 데이터 자체를 돌려 바꿔치기한다(배경 지우기와 같은 방식).
+    // 화질이 깎이지 않게 PNG로 다시 담고, 확대·이동 등 다른 조정값은 그대로 둔다.
+    function rotatePhoto90(slot, dir) {
+      const state = slot && states[slot.dataset.slot];
+      if (!state || !state.src) { showToast('먼저 사진이 든 칸을 선택하세요.'); return; }
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalHeight;
+        c.height = img.naturalWidth;
+        const g = c.getContext('2d');
+        g.translate(c.width / 2, c.height / 2);
+        g.rotate(dir * Math.PI / 2);
+        g.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        pushHistory();
+        state.src = c.toDataURL('image/png');
+        renderSlot(slot);
+      };
+      img.src = state.src;
+    }
+    document.getElementById('rotateLeft').addEventListener('click', () => rotatePhoto90(selectedSlot, -1));
+    document.getElementById('rotateRight').addEventListener('click', () => rotatePhoto90(selectedSlot, 1));
     document.getElementById('fit').addEventListener('click', () => {
       pushHistory();
       Object.assign(currentState(), { zoom: 100, rotate: 0, x: 0, y: 0, flipX: 1, flipY: 1 });
