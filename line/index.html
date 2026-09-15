@@ -59,17 +59,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 
 /* ── 작업 영역: 왼쪽 도구 레일 + 무대 + 오른쪽 패널 (CaseFrame과 같은 문법) ── */
 .workspace{flex:1;min-height:0;display:flex}
-.toolrail{
-  flex:none;width:58px;display:flex;flex-direction:column;gap:8px;align-items:center;
-  padding:12px 0;border-right:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+/* 그리기 도구(직선·곡선): 오른쪽 패널 맨 위, 두 칸 나란히 */
+.tool-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tool-row .tool{
+  display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 0;
+  border:1px solid rgba(255,255,255,.14);border-radius:12px;color:var(--muted);font-size:12px;
+  background:rgba(255,255,255,.03);cursor:pointer;
 }
-.toolrail .tool{
-  width:46px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:4px;
-  border:1px solid transparent;border-radius:12px;color:var(--muted);font-size:9.5px;
-}
-.toolrail .tool svg{width:19px;height:19px}
-.toolrail .tool:hover{background:rgba(255,255,255,.06);color:var(--text)}
-.toolrail .tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
+.tool-row .tool svg{width:16px;height:16px}
+.tool-row .tool:hover{background:rgba(255,255,255,.07);color:var(--text)}
+.tool-row .tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
 .inspector{
   flex:none;width:224px;overflow-y:auto;
   border-left:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
@@ -145,7 +144,7 @@ canvas{display:block}
 /* ── 기타 ── */
 .sitebar{flex:none;padding:6px 14px;color:#6d7d8e;font-size:10.5px;border-top:1px solid rgba(255,255,255,.05)}
 .sitebar a{color:#8fa0b0}
-body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .toolrail,body.fs .inspector{display:none}
+body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .inspector{display:none}
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
   background:#000c;color:#fff;padding:10px 18px;border-radius:8px;
@@ -159,8 +158,6 @@ body.drag #drop{display:block}
   .filmstrip{grid-template-columns:1fr}
   .film-info{border-right:0;padding:10px 14px 0}
   .workspace{flex-direction:column}
-  .toolrail{flex-direction:row;width:auto;padding:6px 10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}
-  .toolrail .tool{flex-direction:row;width:auto;padding:6px 12px;gap:6px;font-size:11px}
   .inspector{width:auto;max-height:190px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
 }
 </style>
@@ -197,17 +194,6 @@ body.drag #drop{display:block}
 </header>
 
 <section class="workspace">
-  <nav class="toolrail" aria-label="그리기 도구">
-    <button class="tool" id="tLine" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg>
-      직선
-    </button>
-    <button class="tool" id="tCurve" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17 C 8 5, 14 21, 21 7"/></svg>
-      곡선
-    </button>
-  </nav>
-
   <section id="stage">
     <canvas id="cv"></canvas>
     <div class="sheet-empty" id="emptySheet">
@@ -224,6 +210,19 @@ body.drag #drop{display:block}
     <div class="inspector-head">
       <h2>선 미세 조정</h2>
       <p id="selInfo">선을 클릭하면 색·굵기를 바꿀 수 있습니다</p>
+    </div>
+    <div class="control-section">
+      <h3>그리기 도구</h3>
+      <div class="tool-row">
+        <button class="tool" id="tLine" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg>
+          직선
+        </button>
+        <button class="tool" id="tCurve" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17 C 8 5, 14 21, 21 7"/></svg>
+          곡선
+        </button>
+      </div>
     </div>
     <div class="control-section">
       <h3>색상</h3>
@@ -614,6 +613,12 @@ brandHome.addEventListener('click', ()=>{ location.href = '/'; });
 brandHome.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); location.href = '/'; } });
 
 resize(); updateButtons(); renderAssets();
+
+// ===== 메인 배열 화면에서 "선그리기" 버튼으로 넘어온 이미지 이어받기 =====
+try{
+  const handoff = localStorage.getItem('cf-line-handoff');
+  if(handoff){ localStorage.removeItem('cf-line-handoff'); addImage(handoff, '배열 화면'); }
+}catch(e){}
 
 // ===== 검증용 =====
 window.LineTool = { loadImage, placeAsset, get assets(){ return assets; }, get shapes(){ return shapes; }, view, get draft(){ return draft; }, undo, redo, exportCanvas };

@@ -1155,7 +1155,7 @@
     .filmstrip {
       min-width: 0;
       display: grid;
-      grid-template-columns: 220px minmax(0, 1fr);
+      grid-template-columns: 200px minmax(0, 1fr) auto;
       border-top: 1px solid rgba(255, 255, 255, .07);
       background: rgba(13, 19, 27, .42);
       -webkit-backdrop-filter: blur(22px);
@@ -1163,10 +1163,11 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
     }
 
-    .film-info { padding: 11px 16px; border-right: 1px solid var(--line); }
-    .film-info h2 { margin: 0 0 4px; font-size: 13px; }
-    .film-info p { margin: 0 0 7px; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
-    .asset-list { display: flex; gap: 9px; padding: 10px; overflow-x: auto; }
+    .film-info { padding: 8px 14px; border-right: 1px solid var(--line); }
+    .film-info h2 { margin: 0 0 3px; font-size: 13px; }
+    .film-info p { margin: 0 0 5px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+    .asset-list { display: flex; gap: 8px; padding: 8px; overflow-x: auto; overflow-y: hidden; }
+    .film-actions { display: grid; place-items: center; padding: 0 12px; border-left: 1px solid var(--line); }
 
     /* 윈도우에서 목록 사진 드래그가 텍스트 선택·이미지 기본 드래그와 충돌하지 않게 한다 */
     .asset, .asset span { user-select: none; -webkit-user-select: none; }
@@ -1174,7 +1175,7 @@
 
     .asset {
       position: relative;
-      flex: 0 0 122px;
+      flex: 0 0 96px;
       overflow: hidden;
       border: 1px solid #2c3948;
       border-radius: 7px;
@@ -1748,14 +1749,17 @@
     <section class="filmstrip">
       <div class="film-info">
         <h2>가져온 사진</h2>
-        <p>클릭하면 선택한 칸에 들어가고, 원하는 칸으로 끌어놓을 수도 있습니다.</p>
+        <p>클릭 또는 드래그로 칸에 배치합니다.</p>
         <button class="btn" id="openFilesBottom">폴더에서 선택</button>
       </div>
       <div class="asset-list" id="assetList">
         <div class="asset-empty">
           <div class="asset-guide-steps"><b>① 사진 불러오기</b> → <b>② 원하는 칸에 배치</b> → <b>③ 이미지 저장</b></div>
-          <div class="asset-guide-sub">JPG/PNG를 여기에 끌어다 놓거나, &ldquo;폴더에서 선택&rdquo;을 누르세요. 사진은 인터넷에 올라가지 않습니다.</div>
+          <div class="asset-guide-sub">JPG/PNG를 여기에 끌어다 놓아도 됩니다. 사진은 인터넷에 올라가지 않습니다.</div>
         </div>
+      </div>
+      <div class="film-actions">
+        <button class="btn" id="toLineTool" title="지금 배열을 통째로 이미지로 만들어 선그리기에서 이어 그립니다 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg> 선그리기</button>
       </div>
     </section>
 
@@ -3209,6 +3213,21 @@
     });
 
     document.getElementById('openFilesBottom').addEventListener('click', () => fileInput.click());
+
+    // 선그리기로 보내기: 지금 배열을 이미지로 만들어 두면, 새 탭의 선그리기 페이지가 이어받는다
+    document.getElementById('toLineTool').addEventListener('click', async () => {
+      const btn = document.getElementById('toLineTool');
+      btn.disabled = true;
+      try {
+        const canvas = await exportCanvas();
+        localStorage.setItem('cf-line-handoff', canvas.toDataURL('image/jpeg', 0.95));
+        window.open('/line/', '_blank');
+      } catch (error) {
+        showToast('이미지를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
     fileInput.addEventListener('change', () => {
       const picked = [...fileInput.files];
       loadFiles(picked);
