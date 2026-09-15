@@ -1111,9 +1111,26 @@
       border-radius: 20px;
     }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
+    /* 사진 보정(밝기·대비)은 빛 조절이라 따뜻한 주황으로 구분한다 */
+    .adjust-controls input[type="range"] { accent-color: #f2a65a; }
 
-    .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .segmented .btn { padding: 0 5px; font-size: 11px; }
+    .segmented { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .segmented .btn { padding: 0 5px; font-size: 12px; }
+    .segmented .wide { grid-column: 1 / -1; }
+
+    /* 기능별 색 구분: 반전=파랑, 90도 회전=민트, 크기 조절=무채색 그대로 */
+    .btn.tint-blue {
+      border-color: rgba(116, 156, 255, .32);
+      background: linear-gradient(180deg, rgba(116, 156, 255, .16), rgba(116, 156, 255, .05) 50%, rgba(116, 156, 255, .09));
+    }
+    .btn.tint-blue:hover { border-color: rgba(116, 156, 255, .55); background: linear-gradient(180deg, rgba(116, 156, 255, .22), rgba(116, 156, 255, .09) 50%, rgba(116, 156, 255, .13)); }
+    .btn.tint-mint {
+      border-color: rgba(53, 199, 176, .38);
+      background: linear-gradient(180deg, rgba(53, 199, 176, .16), rgba(53, 199, 176, .05) 50%, rgba(53, 199, 176, .09));
+    }
+    .btn.tint-mint:hover { border-color: rgba(53, 199, 176, .6); background: linear-gradient(180deg, rgba(53, 199, 176, .22), rgba(53, 199, 176, .09) 50%, rgba(53, 199, 176, .13)); }
+    /* 반전이 켜진 상태(.on)의 민트 표시가 파랑 바탕색에 덮이지 않게 한다 */
+    .btn.tint-blue.on { border-color: rgba(53, 199, 176, .6); color: var(--accent); background: rgba(53, 199, 176, .12); }
 
     .hint {
       padding: 12px;
@@ -1633,10 +1650,9 @@
             <input id="rotate" type="range" min="-15" max="15" step="0.1" value="0">
           </div>
           <div class="segmented">
-            <button class="btn" id="flipX">↔ 좌우</button>
-            <button class="btn" id="flipY">↕ 상하</button>
-            <button class="btn" id="rotateLeft">↺ 90°</button>
-            <button class="btn" id="rotateRight">↻ 90°</button>
+            <button class="btn tint-blue" id="flipX">↔ 좌우</button>
+            <button class="btn tint-blue" id="flipY">↕ 상하</button>
+            <button class="btn tint-mint wide" id="rotateRight">↻ 90° 회전</button>
             <button class="btn" id="fit">원본 맞춤</button>
             <button class="btn" id="fillFit">꽉 채움</button>
           </div>
@@ -1646,7 +1662,7 @@
           <label class="check"><input type="checkbox" id="exportLabels" checked> 이름표(UPPER 등)를 저장 이미지에 포함</label>
           <p class="control-note">체크를 끄면 화면에서 이름표가 흐려지고, 저장 이미지에서는 빠집니다.</p>
         </div>
-        <div class="control-section photo-controls">
+        <div class="control-section photo-controls adjust-controls">
           <h3>사진 보정</h3>
           <div class="control">
             <div class="control-title"><span>밝기</span><span class="value" id="brightnessValue">100</span></div>
@@ -3146,7 +3162,6 @@
       };
       img.src = state.src;
     }
-    document.getElementById('rotateLeft').addEventListener('click', () => rotatePhoto90(selectedSlot, -1));
     document.getElementById('rotateRight').addEventListener('click', () => rotatePhoto90(selectedSlot, 1));
     document.getElementById('fit').addEventListener('click', () => {
       pushHistory();
