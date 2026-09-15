@@ -389,6 +389,10 @@
     }
 
     .tool svg { width: 18px; height: 18px; }
+
+    /* 선그리기 보내기 버튼: 도구들과 구분되게 사이에 가는 줄을 둔다 */
+    .tool.tool-launch { margin-top: 14px; }
+    .tool.tool-launch::before { content: ''; position: absolute; top: -8px; left: 4px; right: 4px; height: 1px; background: rgba(255, 255, 255, .12); }
     .tool:hover { color: var(--accent); border-color: rgba(53, 199, 176, .35); }
     .tool.active {
       color: #06231D;
@@ -1156,7 +1160,7 @@
     .filmstrip {
       min-width: 0;
       display: grid;
-      grid-template-columns: 200px minmax(0, 1fr) auto auto;
+      grid-template-columns: 200px minmax(0, 1fr) auto;
       border-top: 1px solid rgba(255, 255, 255, .07);
       background: rgba(13, 19, 27, .42);
       -webkit-backdrop-filter: blur(22px);
@@ -1168,7 +1172,6 @@
     .film-info h2 { margin: 0 0 3px; font-size: 13px; }
     .film-info p { margin: 0 0 5px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
     .asset-list { display: flex; gap: 8px; padding: 8px; overflow-x: auto; overflow-y: hidden; }
-    .film-actions { display: grid; place-items: center; padding: 0 12px; border-left: 1px solid var(--line); }
     /* 하단 사용 안내: 목록 오른쪽 빈자리, 좁은 화면에서는 숨긴다 */
     .film-hint { align-self: center; padding: 0 14px; border-left: 1px solid var(--line); color: var(--muted); font-size: 10.5px; line-height: 1.75; }
 
@@ -1510,6 +1513,7 @@
         <button class="tool" data-tool="guides" data-label="정렬 가이드" title="정렬 가이드 선택" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20" opacity=".55"/><line x1="15" y1="4" x2="15" y2="20" opacity=".55"/><line x1="3" y1="9.3" x2="21" y2="9.3" opacity=".55"/><line x1="3" y1="14.7" x2="21" y2="14.7" opacity=".55"/></svg></button>
         <button class="tool" data-tool="background" data-label="배경색 선택" title="배경색 선택" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" opacity=".5"/></svg></button>
         <button class="tool" data-tool="logo" data-label="병원 로고 넣기" title="병원 로고 넣기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="7.5" width="15" height="13.5" rx="1.5"/><path d="M12 2v3.5"/><path d="M10.2 3.75h3.6"/><path d="M9.75 21v-3.5h4.5V21"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14h.01M12 14h.01M15.5 14h.01"/></svg></button>
+        <button class="tool tool-launch" id="toLineTool" data-label="선그리기 (새 탭)" title="지금 배열을 통째로 이미지로 만들어 선그리기에서 이어 그립니다 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg></button>
         <div class="layout-popover" id="layoutPopover">
           <h3>사진 배치 선택</h3>
           <div class="layout-options">
@@ -1755,9 +1759,6 @@
         방향키로 사진을 10px씩 옮기고, Shift+방향키는 1px씩 미세하게 옮깁니다.<br>
         Ctrl+Z로 사진 조정을 되돌릴 수 있습니다.<br>
         사진 오른쪽 위 ✥ 손잡이를 끌어 다른 칸과 위치를 바꿀 수 있습니다.
-      </div>
-      <div class="film-actions">
-        <button class="btn" id="toLineTool" title="지금 배열을 통째로 이미지로 만들어 선그리기에서 이어 그립니다 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg> 선그리기</button>
       </div>
     </section>
 
