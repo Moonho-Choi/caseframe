@@ -1116,17 +1116,26 @@
       border-radius: 20px;
     }
     input[type="range"] { width: 100%; accent-color: var(--accent); }
-    /* 사진 보정: 밝기=은색, 대비=코랄 */
-    #brightness { accent-color: #cfd8e0; }
-    #contrast { accent-color: #f2705f; }
+    /* 사진 보정: 밝기=은색 고리, 대비=코랄 고리 — 고리 안은 항상 어둡게 비워 둔다 */
+    #brightness, #contrast { -webkit-appearance: none; appearance: none; height: 14px; background: transparent; }
+    #brightness::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--brightness-track, rgba(255, 255, 255, .22)); }
+    #contrast::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--contrast-track, rgba(255, 255, 255, .22)); }
+    #brightness::-webkit-slider-thumb, #contrast::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 15px; height: 15px; margin-top: -5.5px; border-radius: 50%; background: #10161e; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); cursor: pointer; }
+    #brightness::-webkit-slider-thumb { border: 3px solid #cfd8e0; }
+    #contrast::-webkit-slider-thumb { border: 3px solid #f2705f; }
+    #brightness::-moz-range-track { height: 4px; border-radius: 2px; background: var(--brightness-track, rgba(255, 255, 255, .22)); }
+    #contrast::-moz-range-track { height: 4px; border-radius: 2px; background: var(--contrast-track, rgba(255, 255, 255, .22)); }
+    #brightness::-moz-range-thumb, #contrast::-moz-range-thumb { box-sizing: border-box; width: 15px; height: 15px; border-radius: 50%; background: #10161e; cursor: pointer; }
+    #brightness::-moz-range-thumb { border: 3px solid #cfd8e0; }
+    #contrast::-moz-range-thumb { border: 3px solid #f2705f; }
     /* 확대/축소=하늘색, 회전=로즈 — 같은 구역의 두 막대가 색으로 바로 구분되게 */
     #zoom { accent-color: #56b8ec; }
-    /* 미세 회전: 0도(가운데)를 기준으로 기운 쪽으로만 분홍이 뻗는다. 색 띠는 JS가 값에 맞춰 그린다 */
+    /* 미세 회전: 0도(가운데)를 기준으로 기운 쪽으로만 흰 띠가 뻗는다. 띠는 JS가 값에 맞춰 그린다 */
     #rotate { -webkit-appearance: none; appearance: none; height: 14px; background: transparent; }
     #rotate::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--rotate-track, rgba(255, 255, 255, .22)); }
-    #rotate::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #ec7fa8; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); cursor: pointer; }
+    #rotate::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -4.5px; border-radius: 4px; background: #f2f6fa; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); cursor: pointer; }
     #rotate::-moz-range-track { height: 4px; border-radius: 2px; background: var(--rotate-track, rgba(255, 255, 255, .22)); }
-    #rotate::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: #ec7fa8; cursor: pointer; }
+    #rotate::-moz-range-thumb { width: 13px; height: 13px; border: none; border-radius: 4px; background: #f2f6fa; cursor: pointer; }
 
     .segmented { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 6px; }
     .segmented .btn { padding: 0 5px; font-size: 12px; }
@@ -3105,10 +3114,24 @@
       const base = 'rgba(255, 255, 255, .22)';
       const from = Math.min(50, p), to = Math.max(50, p);
       input.style.setProperty('--rotate-track',
-        `linear-gradient(to right, ${base} 0% ${from}%, #ec7fa8 ${from}% ${to}%, ${base} ${to}% 100%)`);
+        `linear-gradient(to right, ${base} 0% ${from}%, #f2f6fa ${from}% ${to}%, ${base} ${to}% 100%)`);
     }
     document.getElementById('rotate').addEventListener('input', updateRotateTrack);
     updateRotateTrack();
+
+    // 밝기·대비 막대의 채움 띠: 왼쪽부터 손잡이까지 각자의 색으로 칠한다
+    function updateAdjustTracks() {
+      [['brightness', '--brightness-track', '#cfd8e0'], ['contrast', '--contrast-track', '#f2705f']].forEach(([id, varName, color]) => {
+        const input = document.getElementById(id);
+        const min = Number(input.min), max = Number(input.max);
+        const p = (Number(input.value) - min) / (max - min) * 100;
+        input.style.setProperty(varName,
+          `linear-gradient(to right, ${color} 0% ${p}%, rgba(255, 255, 255, .22) ${p}% 100%)`);
+      });
+    }
+    document.getElementById('brightness').addEventListener('input', updateAdjustTracks);
+    document.getElementById('contrast').addEventListener('input', updateAdjustTracks);
+    updateAdjustTracks();
 
     document.getElementById('fontSize').addEventListener('input', event => {
       if (!selectedTextBox) return;
@@ -3169,6 +3192,7 @@
       document.getElementById('flipX').classList.toggle('on', state.flipX === -1);
       document.getElementById('flipY').classList.toggle('on', state.flipY === -1);
       updateRotateTrack();
+      updateAdjustTracks();
     }
 
     document.getElementById('flipX').addEventListener('click', () => { pushHistory(); currentState().flipX *= -1; renderSlot(selectedSlot); syncControls(); });
