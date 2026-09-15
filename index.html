@@ -321,6 +321,7 @@
     .sg-v2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
     .sg-h2 { grid-template-columns: 1fr 1fr; }
     .sg-h3 { grid-template-columns: 1fr 1fr 1fr; }
+    .sg-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
     .sg-22 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
     .sg-23 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
     .sg-32 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
@@ -1155,7 +1156,7 @@
     .filmstrip {
       min-width: 0;
       display: grid;
-      grid-template-columns: 200px minmax(0, 1fr) auto;
+      grid-template-columns: 200px minmax(0, 1fr) auto auto;
       border-top: 1px solid rgba(255, 255, 255, .07);
       background: rgba(13, 19, 27, .42);
       -webkit-backdrop-filter: blur(22px);
@@ -1168,6 +1169,8 @@
     .film-info p { margin: 0 0 5px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
     .asset-list { display: flex; gap: 8px; padding: 8px; overflow-x: auto; overflow-y: hidden; }
     .film-actions { display: grid; place-items: center; padding: 0 12px; border-left: 1px solid var(--line); }
+    /* 하단 사용 안내: 목록 오른쪽 빈자리, 좁은 화면에서는 숨긴다 */
+    .film-hint { align-self: center; padding: 0 14px; border-left: 1px solid var(--line); color: var(--muted); font-size: 10.5px; line-height: 1.75; }
 
     /* 윈도우에서 목록 사진 드래그가 텍스트 선택·이미지 기본 드래그와 충돌하지 않게 한다 */
     .asset, .asset span { user-select: none; -webkit-user-select: none; }
@@ -1445,6 +1448,7 @@
       .stage-wrap { padding: 10px; }
       .inspector { border-left: 0; border-top: 1px solid var(--line); }
       .filmstrip { grid-template-columns: 1fr; }
+      .film-hint { display: none; }
       .film-info { padding: 12px 14px 8px; border-right: 0; }
       .asset-list { height: 100px; }
       /* 빈 화면 안내가 있을 때는 높이를 내용에 맞춰 늘려 잘리지 않게 한다 */
@@ -1513,6 +1517,7 @@
             <button class="layout-option" data-layout-option="vertical2"><span class="layout-preview" style="--cols:1;--rows:2"><i></i><i></i></span><span>위아래</span></button>
             <button class="layout-option" data-layout-option="horizontal2"><span class="layout-preview" style="--cols:2;--rows:1"><i></i><i></i></span><span>좌우</span></button>
             <button class="layout-option" data-layout-option="horizontal3"><span class="layout-preview" style="--cols:3;--rows:1"><i></i><i></i><i></i></span><span>가로 3장</span></button>
+            <button class="layout-option" data-layout-option="single"><span class="layout-preview" style="--cols:1;--rows:1"><i></i></span><span>한 장</span></button>
             <button class="layout-option" data-layout-option="grid22"><span class="layout-preview" style="--cols:2;--rows:2"><i></i><i></i><i></i><i></i></span><span>2 × 2</span></button>
             <button class="layout-option" data-layout-option="grid23"><span class="layout-preview" style="--cols:2;--rows:3"><i></i><i></i><i></i><i></i><i></i><i></i></span><span>2 × 3</span></button>
             <button class="layout-option" data-layout-option="grid32"><span class="layout-preview" style="--cols:3;--rows:2"><i></i><i></i><i></i><i></i><i></i><i></i></span><span>3 × 2</span></button>
@@ -1730,19 +1735,6 @@
             </select>
           </div>
         </div>
-        <div class="control-section">
-          <h3>사용 안내</h3>
-          <div class="hint">
-            사진 위를 드래그해 위치를 조정하세요.<br>
-            마우스 휠로 확대·축소, Shift+휠은 미세 조정입니다.<br>
-            방향키로 사진을 10px씩 옮기고, Shift+방향키는 1px씩 미세하게 옮깁니다.<br>
-            Ctrl+Z로 사진 조정을 되돌릴 수 있습니다.<br>
-            사진 오른쪽 위 ✥ 손잡이를 끌어 다른 칸과 위치를 바꿀 수 있습니다.<br>
-            사진이 들어간 칸의 우측 상단 ×로 사진을 뺄 수 있습니다.<br>
-            글상자는 상단 손잡이로 이동하고 오른쪽 아래 점으로 크기를 조절합니다.<br>
-            정렬선은 저장 이미지에 포함되지 않습니다.
-          </div>
-        </div>
       </aside>
     </section>
 
@@ -1757,6 +1749,12 @@
           <div class="asset-guide-steps"><b>① 사진 불러오기</b> → <b>② 원하는 칸에 배치</b> → <b>③ 이미지 저장</b></div>
           <div class="asset-guide-sub">JPG/PNG를 여기에 끌어다 놓아도 됩니다. 사진은 인터넷에 올라가지 않습니다.</div>
         </div>
+      </div>
+      <div class="film-hint">
+        마우스 휠로 확대·축소, Shift+휠은 미세 조정입니다.<br>
+        방향키로 사진을 10px씩 옮기고, Shift+방향키는 1px씩 미세하게 옮깁니다.<br>
+        Ctrl+Z로 사진 조정을 되돌릴 수 있습니다.<br>
+        사진 오른쪽 위 ✥ 손잡이를 끌어 다른 칸과 위치를 바꿀 수 있습니다.
       </div>
       <div class="film-actions">
         <button class="btn" id="toLineTool" title="지금 배열을 통째로 이미지로 만들어 선그리기에서 이어 그립니다 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg> 선그리기</button>
@@ -1809,6 +1807,10 @@
         <button class="start-lay" data-start-layout="horizontal3">
           <span class="start-mini sg-h3"><i class="lbl" data-l="R"></i><i class="lbl" data-l="C"></i><i class="lbl" data-l="L"></i></span>
           <h4>가로 3장</h4><span class="start-cap">안모 3면</span>
+        </button>
+        <button class="start-lay" data-start-layout="single">
+          <span class="start-mini sg-1"><i></i></span>
+          <h4>한 장</h4><span class="start-cap">단일 사진·파노라마</span>
         </button>
         <button class="start-lay" data-start-layout="grid22">
           <span class="start-mini sg-22"><i></i><i></i><i></i><i></i></span>
@@ -1932,6 +1934,7 @@
       vertical2: { name: '위아래', cols: 1, rows: 2, count: 2 },
       horizontal2: { name: '좌우', cols: 2, rows: 1, count: 2 },
       horizontal3: { name: '가로 3장', cols: 3, rows: 1, count: 3 },
+      single: { name: '한 장', cols: 1, rows: 1, count: 1 },
       grid22: { name: '2 × 2', cols: 2, rows: 2, count: 4 },
       grid23: { name: '2 × 3', cols: 2, rows: 3, count: 6 },
       grid32: { name: '3 × 2', cols: 3, rows: 2, count: 6 },

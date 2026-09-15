@@ -59,7 +59,24 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 
 /* ── 작업 영역: 왼쪽 도구 레일 + 무대 + 오른쪽 패널 (CaseFrame과 같은 문법) ── */
 .workspace{flex:1;min-height:0;display:flex}
-/* 그리기 도구(직선·곡선): 오른쪽 패널 맨 위, 두 칸 나란히 */
+/* 상단 되돌리기·다시 실행 묶음 (CaseFrame 본체와 같은 문법) */
+.history-group{
+  display:flex;align-items:stretch;min-height:34px;flex:none;
+  border:1px solid rgba(255,255,255,.09);border-radius:12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.16);overflow:hidden;
+}
+.history-btn{
+  display:inline-flex;align-items:center;gap:7px;padding:0 12px;border:0;background:transparent;
+  color:#c3cedb;cursor:pointer;font-size:12.5px;white-space:nowrap;transition:background .15s,color .15s;
+}
+.history-btn svg{width:15px;height:15px}
+.history-btn:hover{color:var(--accent);background:#1c2936}
+.history-btn:active{background:#22303f}
+.history-btn:disabled{opacity:.32;cursor:default;pointer-events:none}
+.history-divider{width:1px;margin:6px 0;background:var(--line)}
+
+/* 오른쪽 패널의 직선·곡선 버튼: 두 칸 나란히, 왼쪽 기둥과 연동 */
 .tool-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tool-row .tool{
   display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 0;
@@ -69,6 +86,27 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .tool-row .tool svg{width:16px;height:16px}
 .tool-row .tool:hover{background:rgba(255,255,255,.07);color:var(--text)}
 .tool-row .tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
+
+/* 왼쪽 도구 기둥: 직선·곡선 (CaseFrame 본체와 같은 문법) */
+.toolrail{
+  flex:none;z-index:12;padding:12px 8px;
+  border-right:1px solid rgba(255,255,255,.06);background:rgba(13,19,27,.38);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+}
+.toolrail .tool{
+  width:40px;height:40px;margin-bottom:6px;display:grid;place-items:center;
+  border:1px solid rgba(255,255,255,.09);border-radius:12px;color:#AEBCCA;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.14);cursor:pointer;
+}
+.toolrail .tool svg{width:18px;height:18px}
+.toolrail .tool:hover{color:var(--accent);border-color:rgba(53,199,176,.35)}
+.toolrail .tool.on{
+  color:#06231D;border-color:transparent;
+  background:linear-gradient(180deg,#58E0C9,#23A78E);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.4),0 4px 12px rgba(53,199,176,.3);
+}
 .inspector{
   flex:none;width:224px;overflow-y:auto;
   border-left:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
@@ -116,7 +154,7 @@ canvas{display:block}
 
 /* ── 아래 필름 칸 (CaseFrame과 같은 문법) ── */
 .filmstrip{
-  flex:none;min-width:0;display:grid;grid-template-columns:220px minmax(0,1fr);
+  flex:none;min-width:0;display:grid;grid-template-columns:220px minmax(0,1fr) auto;
   border-top:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
   -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
@@ -140,11 +178,13 @@ canvas{display:block}
 .asset.active{border-color:var(--accent);box-shadow:0 0 0 1.5px rgba(53,199,176,.55)}
 .asset-empty{align-self:center;color:var(--muted);font-size:11px;line-height:1.6;padding:0 6px}
 .asset-empty b{color:#c7d2dc}
+/* 하단 사용 안내: 목록 오른쪽 빈자리, 좁은 화면에서는 숨긴다 */
+.film-hint{align-self:center;padding:0 14px;border-left:1px solid var(--line);color:var(--muted);font-size:10.5px;line-height:1.75}
 
 /* ── 기타 ── */
 .sitebar{flex:none;padding:6px 14px;color:#6d7d8e;font-size:10.5px;border-top:1px solid rgba(255,255,255,.05)}
 .sitebar a{color:#8fa0b0}
-body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .inspector{display:none}
+body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .toolrail,body.fs .inspector{display:none}
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
   background:#000c;color:#fff;padding:10px 18px;border-radius:8px;
@@ -156,6 +196,7 @@ body.drag #drop{display:block}
 @media (max-width:900px){
   .brand small,.privacy-note{display:none}
   .filmstrip{grid-template-columns:1fr}
+  .film-hint{display:none}
   .film-info{border-right:0;padding:10px 14px 0}
   .workspace{flex-direction:column}
   .inspector{width:auto;max-height:190px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
@@ -181,9 +222,18 @@ body.drag #drop{display:block}
     <div><b>CaseFrame</b><small>선그리기 도구 · 로고를 누르면 처음으로</small></div>
   </div>
   <span class="sep"></span>
-  <button class="btn ghost" id="bUndo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
-  <button class="btn ghost" id="bRedo" title="다시 실행 (Ctrl+Y)">다시 실행</button>
-  <button class="btn ghost" id="bClear" title="모두 지우기">모두 지우기</button>
+  <div class="history-group" role="group" aria-label="작업 되돌리기">
+    <button class="history-btn" id="bUndo" title="되돌리기 (Ctrl+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      <span>되돌리기</span>
+    </button>
+    <span class="history-divider"></span>
+    <button class="history-btn" id="bRedo" title="다시 실행 (Ctrl+Y)">
+      <span>다시 실행</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+    </button>
+  </div>
+  <button class="btn ghost" id="bClear" title="모두 지우기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg> 모두 지우기</button>
   <span class="spacer"></span>
   <div class="privacy-note" title="모든 사진은 사용하시는 컴퓨터 안에서만 처리되며, 인터넷이나 외부 서버로 전송되지 않습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 인터넷에 올라가지 않습니다</span></div>
   <button class="btn" id="bFit" title="맞춤 (0)">맞춤</button>
@@ -194,6 +244,11 @@ body.drag #drop{display:block}
 </header>
 
 <section class="workspace">
+  <nav class="toolrail" aria-label="그리기 도구">
+    <button class="tool" id="tLine" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg></button>
+    <button class="tool" id="tCurve" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17 C 8 5, 14 21, 21 7"/></svg></button>
+  </nav>
+
   <section id="stage">
     <canvas id="cv"></canvas>
     <div class="sheet-empty" id="emptySheet">
@@ -214,11 +269,11 @@ body.drag #drop{display:block}
     <div class="control-section">
       <h3>그리기 도구</h3>
       <div class="tool-row">
-        <button class="tool" id="tLine" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다">
+        <button class="tool" id="tLine2" title="직선 (1) — 클릭할 때마다 꺾이고, 더블클릭으로 끝냅니다">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg>
           직선
         </button>
-        <button class="tool" id="tCurve" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다">
+        <button class="tool" id="tCurve2" title="곡선 (2) — 점을 찍고 더블클릭으로 완성합니다">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17 C 8 5, 14 21, 21 7"/></svg>
           곡선
         </button>
@@ -238,16 +293,6 @@ body.drag #drop{display:block}
     <div class="control-section">
       <button class="btn danger" id="bDelSel" title="선택한 선 삭제 (Delete)">선택한 선 삭제</button>
     </div>
-    <div class="control-section">
-      <h3>사용 안내</h3>
-      <div class="hint">
-        직선(1): 클릭할 때마다 꺾이고, 더블클릭이나 Enter로 끝냅니다.<br>
-        곡선(2): 점을 찍고 더블클릭으로 완성합니다.<br>
-        그린 선을 클릭해 선택하면 점을 끌어 고치고, 점 우클릭으로 지웁니다.<br>
-        휠 확대·축소 · Space+드래그 이동 · 0 맞춤 · F 전체화면.<br>
-        Ctrl+C 복사 · Ctrl+S 저장 · Ctrl+Z 되돌리기.
-      </div>
-    </div>
   </aside>
 </section>
 
@@ -260,6 +305,12 @@ body.drag #drop{display:block}
   </div>
   <div class="asset-list" id="assetList">
     <div class="asset-empty" id="assetEmpty"><b>① 캡처 붙여넣기(Ctrl+V) 또는 사진 불러오기</b> → <b>② 직선·곡선 그리기</b> → <b>③ 복사·저장</b><br>JPG/PNG를 여기에 끌어다 놓아도 됩니다. 사진은 인터넷에 올라가지 않습니다.</div>
+  </div>
+  <div class="film-hint">
+    직선(1): 클릭으로 꺾고 더블클릭·Enter로 끝 · 곡선(2): 점을 찍고 더블클릭으로 완성.<br>
+    그린 선을 클릭해 선택하면 점을 끌어 고치고, 점 우클릭으로 지웁니다.<br>
+    휠 확대·축소 · Space+드래그 이동 · 0 맞춤 · F 전체화면.<br>
+    Ctrl+C 복사 · Ctrl+S 저장 · Ctrl+Z 되돌리기.
   </div>
 </section>
 
@@ -479,7 +530,7 @@ function commit(shape){ snapshot(); shapes.push(shape); sel = -1; draft = null; 
 function clearAll(){ if(!shapes.length) return; if(!confirm('그린 선을 모두 지울까요?')) return; snapshot(); shapes = []; sel = -1; draft = null; render(); }
 
 // ===== 도구·색·굵기 =====
-function setTool(t){ tool = t; if(draft && (draft.kind === 'line' || draft.kind === 'curve')) draft = null; $('tLine').classList.toggle('on', t === 'line'); $('tCurve').classList.toggle('on', t === 'curve'); render(); }
+function setTool(t){ tool = t; if(draft && (draft.kind === 'line' || draft.kind === 'curve')) draft = null; ['tLine','tLine2'].forEach(id=>$(id).classList.toggle('on', t === 'line')); ['tCurve','tCurve2'].forEach(id=>$(id).classList.toggle('on', t === 'curve')); render(); }
 function refreshColorUI(){
   [...$('colorChips').querySelectorAll('.sw')].forEach(b=>b.classList.toggle('on', b.dataset.c === color));
   const cu = $('colorCustom'), preset = COLORS.includes(color);
@@ -494,7 +545,7 @@ $('colorCustom').addEventListener('pointerdown', ()=>{ if(sel >= 0) snapshot(); 
 $('colorCustom').addEventListener('input', e=>setColor(e.target.value, false));
 $('widthRange').addEventListener('pointerdown', ()=>{ if(sel >= 0) snapshot(); });
 $('widthRange').addEventListener('input', e=>setWidth(+e.target.value, false));
-$('tLine').onclick = ()=>setTool('line'); $('tCurve').onclick = ()=>setTool('curve');
+$('tLine').onclick = $('tLine2').onclick = ()=>setTool('line'); $('tCurve').onclick = $('tCurve2').onclick = ()=>setTool('curve');
 $('bUndo').onclick = undo; $('bRedo').onclick = redo; $('bClear').onclick = clearAll;
 $('bDelSel').onclick = ()=>{ if(sel < 0){ toast('먼저 그린 선을 클릭해 선택하세요'); return; } snapshot(); shapes.splice(sel,1); sel = -1; render(); };
 setTool('line'); setColor(color); setWidth(width);
