@@ -19,4 +19,13 @@ document.getElementById('f').onchange = async e => {
   }, () => false);
   log(`${n}장 ${Math.round(performance.now() - t1)}ms`);
 };
+import * as Mp4Muxer from '../../vendor/mp4-muxer.mjs';
+import { Mp4Encoder, drawLabel } from '../js/encode.js';
+window.testEncode = async () => {
+  const w = 640, h = 480, c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
+  const enc = await Mp4Encoder.create(Mp4Muxer, w, h, 30);
+  for (let i = 0; i < 60; i++) { ctx.fillStyle = `hsl(${i * 6},60%,50%)`; ctx.fillRect(0, 0, w, h); drawLabel(ctx, `${i}개월`, w); await enc.addFrame(c, i); }
+  const blob = await enc.finish(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'test.mp4'; a.textContent = `MP4 ${blob.size} bytes 내려받기`; document.body.appendChild(a);
+  const v = document.createElement('video'); v.src = a.href; v.controls = true; document.body.appendChild(v); log('encode ok ' + blob.size);
+};
 </script></body></html>
