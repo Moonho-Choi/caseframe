@@ -31,11 +31,11 @@ export function toGray(cv, image) {
 
 export function detect(cv, gray) {
   const orb = new cv.ORB(6000);
-  const kp = new cv.KeyPointVector(); const des = new cv.Mat();
-  orb.detectAndCompute(gray, new cv.Mat(), kp, des);
+  const kp = new cv.KeyPointVector(); const des = new cv.Mat(); const mask = new cv.Mat();
+  orb.detectAndCompute(gray, mask, kp, des);
   const n = kp.size(); const pts = new Float32Array(2 * n);
   for (let i = 0; i < n; i++) { const p = kp.get(i).pt; pts[2 * i] = p.x; pts[2 * i + 1] = p.y; }
-  kp.delete(); orb.delete();
+  kp.delete(); orb.delete(); mask.delete();
   return { pts, des, n, delete() { des.delete(); } };
 }
 
@@ -88,7 +88,7 @@ export function pairTransform(cv, fa, fb, W) {
   const mm = new cv.DMatchVectorVector();
   bf.knnMatch(fb.des, fa.des, mm, 2);
   const pairs = [];
-  for (let i = 0; i < mm.size(); i++) { const p = mm.get(i); if (p.size() >= 2) pairs.push([p.get(0).queryIdx, p.get(0).trainIdx, p.get(0).distance, p.get(1).distance]); }
+  for (let i = 0; i < mm.size(); i++) { const p = mm.get(i); if (p.size() >= 2) pairs.push([p.get(0).queryIdx, p.get(0).trainIdx, p.get(0).distance, p.get(1).distance]); p.delete(); }
   mm.delete(); bf.delete();
   let best = null;
   for (const ratio of [0.7, 0.8]) {
