@@ -3761,7 +3761,7 @@
     }
     document.querySelectorAll('.start-lay').forEach(startBtn => {
       startBtn.addEventListener('click', () => {
-        if (startBtn.dataset.href) {                      // 선그리기 전용 — 별도 도구를 새 탭으로
+        if (startBtn.dataset.href) {                      // 별도 도구(선 그리기·교정 진행 영상) — 새 탭으로
           window.open(startBtn.dataset.href, '_blank', 'noopener');
           startOverlay.classList.remove('open');
           return;

@@ -14,7 +14,7 @@ test('sortItems by date then name', () => {
 test('monthsLabel', () => {
   const d0 = new Date(2022, 10, 28);
   assert.equal(monthsLabel(d0, d0), '시작');
-  assert.equal(monthsLabel(d0, new Date(2022, 11, 20)), '시작');       // 30일 미만
+  assert.equal(monthsLabel(d0, new Date(2022, 11, 20)), '시작');       // 달은 넘겼지만 28일이 안 지나 아직 0개월(달력 기준)
   assert.equal(monthsLabel(d0, new Date(2023, 1, 6)), '2개월');
   assert.equal(monthsLabel(d0, new Date(2023, 10, 28)), '1년');
   assert.equal(monthsLabel(d0, new Date(2024, 1, 19)), '1년 2개월');

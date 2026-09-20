@@ -9,6 +9,9 @@ import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
+// "경과 글씨" 체크박스에서 사용자가 마지막으로 고른 값. 날짜 없는 사진이 섞이면
+// 체크박스를 끄고 잠그는데, 그 사진을 빼고 나면 원래 값으로 되돌려 줘야 한다.
+let labelPref = true;
 const MAX = 40;
 // RIFE 세션(21.6MB 모델 + GPU 버퍼)은 만들기를 누를 때마다 새로 올리면 그만큼씩 쌓인다.
 // 한 번 만든 세션을 계속 돌려 쓰고, 추론이 고장난 경우에만 버린다.
@@ -30,8 +33,13 @@ function renderStrip() {
   state.items.forEach((it, i) => {
     const d = document.createElement('div'); d.className = 'thumb'; d.draggable = !lock;
     const f = state.flags[i]; if (f && f.warn === 'flip') d.classList.add('warn-flip'); if (f && f.warn === 'other') d.classList.add('warn-other'); if (state.status[i] === 'fail') d.classList.add('fail');
-    const c = document.createElement('canvas'); c.width = it.image.width; c.height = it.image.height; c.getContext('2d').putImageData(it.image, 0, 0);
-    const img = document.createElement('img'); img.src = c.toDataURL('image/jpeg', 0.6); d.appendChild(img);
+    // 작은 그림은 만들 때마다 1280px 원본을 JPEG로 다시 짜내야 해서 40장이면 화살표 한
+    // 번에 1초씩 멈춘다. 사진에 붙여 두고 좌우를 뒤집을 때만 다시 만든다.
+    if (!it.thumb) {
+      const c = document.createElement('canvas'); c.width = it.image.width; c.height = it.image.height; c.getContext('2d').putImageData(it.image, 0, 0);
+      it.thumb = c.toDataURL('image/jpeg', 0.6);
+    }
+    const img = document.createElement('img'); img.src = it.thumb; d.appendChild(img);
     const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = `${i + 1}. ${it.name}` + (f && f.warn === 'flip' ? ' (자동 뒤집음)' : f && f.warn === 'other' ? ' (다른 방향?)' : ''); d.appendChild(cap);
     const b = document.createElement('div'); b.className = 'btns';
     for (const [t, fn] of [['◀', () => move(i, -1)], ['▶', () => move(i, 1)], ['⇄', () => flip(i)], ['✕', () => remove(i)]]) { const x = document.createElement('button'); x.textContent = t; x.onclick = fn; x.disabled = lock; b.appendChild(x); }
@@ -52,7 +60,8 @@ function renderStrip() {
   });
   $('go').disabled = state.items.length < 2 || lock;
   const noDate = state.items.some(it => !it.date);
-  $('label').disabled = noDate; if (noDate) $('label').checked = false;
+  $('label').disabled = noDate;
+  $('label').checked = noDate ? false : labelPref;
 }
 // state.status(정합 성공/실패 표시)는 chainTransforms가 채운 배열이라 items/flags와
 // 길이·순서가 항상 같아야 한다. 어긋나면(예: 아직 한 번도 만들기를 안 돌렸거나, 다른
@@ -68,7 +77,7 @@ function moveTo(from, to) {
   renderStrip();
 }
 function flip(i) {
-  state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: null };
+  state.items[i].image = flipImageData(state.items[i].image); state.items[i].thumb = null; state.flags[i] = { warn: null };
   // 사용자가 직접 정한 방향은 나중에 사진을 더 넣어도 자동 판정이 뒤엎지 않는다.
   state.items[i].userFlipped = true;
   state.status = []; // 뒤집으면 이전 정합 결과가 더 이상 맞지 않는다
@@ -232,5 +241,6 @@ window.addEventListener('drop', e => {
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
 });
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
+$('label').onchange = () => { if (!$('label').disabled) labelPref = $('label').checked; };
 $('go').onclick = make;
 $('cancel').onclick = () => { state.cancelled = true; };
