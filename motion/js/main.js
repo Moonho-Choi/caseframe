@@ -147,6 +147,10 @@ function applyOrientation(res, prevCount) {
 async function make() {
   if (state.busy || state.loading) return;
   state.busy = true; state.cancelled = false; $('go').disabled = true; $('cancel').hidden = false; $('result').hidden = true; setMsg('');
+  // 잠금 표시는 여기서 바로 그려야 한다. 예전에는 chainTransforms가 끝난 뒤에야
+  // renderStrip()이 불려서, 제일 오래 걸리는 "구도 맞추는 중" 내내 ◀▶⇄✕ 버튼이
+  // 그대로 눌렸다 — H1이 막으려던 바로 그 구간이 열려 있었다.
+  renderStrip();
   const cancelled = () => state.cancelled;
   let grays = null, enc = null, rife = null;
   try {
