@@ -1,0 +1,22 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>motion 부품 확인</title>
+<body style="font-family:sans-serif;background:#222;color:#eee">
+<p>사진 2장 선택 → RIFE로 사이 8장 생성 (WebGPU 필요) <input type="file" id="f" multiple accept="image/*"></p>
+<pre id="log"></pre><div id="out" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+<script type="module">
+import * as ort from '../../vendor/ort/ort.webgpu.min.mjs';
+import { loadFiles } from '../js/load.js';
+import { Rife, transition, imageToCHW, chwToImage } from '../js/interp.js';
+ort.env.wasm.wasmPaths = '../../vendor/ort/';
+const log = m => document.getElementById('log').textContent += m + '\n';
+document.getElementById('f').onchange = async e => {
+  const { items } = await loadFiles([...e.target.files].slice(0, 2), 640);
+  const w = items[0].image.width, h = items[0].image.height;
+  const t0 = performance.now(); const rife = await Rife.create(ort, '../models/rife_fp32.onnx');
+  log(`모델 ${rife ? '준비' : '없음(단순 겹치기)'} ${Math.round(performance.now() - t0)}ms, ${w}x${h}`);
+  const t1 = performance.now(); let n = 0;
+  await transition(imageToCHW(items[0].image), imageToCHW(items[1].image), w, h, 8, 3, rife, async chw => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').putImageData(chwToImage(chw, w, h), 0, 0); c.style.width = '300px'; document.getElementById('out').appendChild(c); n++;
+  }, () => false);
+  log(`${n}장 ${Math.round(performance.now() - t1)}ms`);
+};
+</script></body></html>
