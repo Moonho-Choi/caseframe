@@ -8,11 +8,14 @@
 // resolveFn(Module)로 "자기 자신"을 넘겨 또 thenable 취급을 받는 일이 마이크로태스크
 // 단위로 영원히 반복된다. 화면은 아무 에러 없이 "사진 읽는 중" 직후에서 멈춘 것처럼
 // 보인다(실은 렌더러가 이 무한 microtask 루프에 갇혀 있는 것). 그래서 resolve하기
-// 직전에 반드시 then을 지우거나, 안 지워지면 Proxy로 가려서 절대 thenable을 그대로
-// 넘기지 않는다.
+// 직전에 반드시 then을 지우거나, 안 지워지면 then이 undefined인 껍데기 객체를 대신
+// 넘겨서 절대 thenable을 그대로 넘기지 않는다.
 //
-// Node 테스트(motion/test/_cv.mjs)는 원래 Proxy로 then을 가려서 이 문제를 피해 왔다 —
-// 브라우저에서 실제로 쓰는 이 함수도 같은 방어를 하도록 옮겨 왔다.
+// 껍데기는 Object.create(cv)로 만든다 — cv를 프로토타입으로 삼으므로 cv.Mat, cv.ORB
+// 같은 것은 그대로 읽히고, 자기 자신에만 then: undefined를 박아 가린다. (Proxy로
+// 가리는 방법은 then이 configurable:false + writable:false로 박혀 있는 경우
+// "프록시는 고칠 수 없는 속성의 실제 값을 돌려줘야 한다"는 규칙에 걸려 TypeError로
+// 터진다 — 정확히 이 대비책이 필요한 상황에서 못 쓰는 셈이라 쓰지 않는다.)
 // timeoutMs를 넘겨도 cv가 준비되지 않으면 거절한다. 예전에는 무한히 100ms마다 다시
 // 확인만 해서, opencv.js(11MB) 요청이 막히면 "사진 읽는 중"에서 영원히 멈춘 채
 // 아무 메시지도 안 나오고 그 뒤로 끌어다 놓는 사진도 전부 조용히 무시됐다.
@@ -29,9 +32,12 @@ export function cvReady(win = globalThis.window, timeoutMs = 30000) {
         setTimeout(tick, 100); return;
       }
       const cv = win.cv;
-      try { delete cv.then; } catch (e) { /* 지워지지 않으면 아래서 Proxy로 가린다 */ }
-      if (typeof cv.then === 'function') resolve(new Proxy(cv, { get: (t, p) => (p === 'then' ? undefined : t[p]) }));
-      else resolve(cv);
+      try { delete cv.then; } catch (e) { /* 지워지지 않으면 아래서 껍데기로 가린다 */ }
+      if (typeof cv.then === 'function') {
+        const shim = Object.create(cv);
+        Object.defineProperty(shim, 'then', { value: undefined });
+        resolve(shim);
+      } else resolve(cv);
     };
     tick();
   });

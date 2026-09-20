@@ -79,3 +79,19 @@ test('checkOrientation flips the whole labelling when the first photo is the mir
   assert.equal(r[0].warn, 'flip');
   grays.forEach(g => g.delete()); base.delete();
 });
+
+// 이웃과 아무 관계도 못 읽는 사진(여기서는 특징점이 하나도 안 나오는 민무늬 사진)은
+// 뒤집지 않고 빨간 "다른 방향?" 표시만 붙어야 한다. 이 경로가 잘못 돌면 멀쩡한 사진을
+// 뒤집거나, 반대로 섞여 들어온 다른 방향 사진을 아무 표시 없이 통과시킨다.
+test('checkOrientation marks a photo it cannot relate to neighbours as other', async () => {
+  const cv = await cvReady();
+  const W = 640, H = 480;
+  const base = makeTexture(cv, W, H, 21);
+  const grays = [0, 1, 2].map(i => warpGray(cv, base, similarity(1 + 0.02 * i, i - 1, 6 * i, -4 * i)));
+  grays.push(new cv.Mat(H, W, cv.CV_8UC1, new cv.Scalar(128)));   // 민무늬 = 특징점 0개
+  const r = await checkOrientation(cv, grays, W);
+  assert.deepEqual(r.map(x => x.flip), [false, false, false, false]);
+  assert.equal(r[3].warn, 'other');
+  assert.deepEqual(r.slice(0, 3).map(x => x.warn), [null, null, null]);
+  grays.forEach(g => g.delete()); base.delete();
+});

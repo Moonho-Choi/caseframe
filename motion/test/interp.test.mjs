@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planTiming, blend, transition, imageToCHW, chwToImage } from '../js/interp.js';
+import { planTiming, blend, transition, imageToCHW, chwToImage, aiLevelsFor } from '../js/interp.js';
 
 test('planTiming', () => {
   assert.deepEqual(planTiming(1.2), { N: 64, fps: 53 });
@@ -35,4 +35,14 @@ test('transition stops when cancelled', async () => {
   let n = 0;
   await transition(Float32Array.from([0]), Float32Array.from([1]), 1, 1, 8, 0, null, async () => { n++; }, () => n >= 3);
   assert.equal(n, 3);
+});
+
+// 고품질 = 모든 분할 단계를 인공지능이 그린다(N=64면 6단계). 빠르게 = 위 2단계만
+// 인공지능(= 한 구간을 4토막으로 나눈 데까지), 그 아래는 선형 겹치기. 그 밖의 값은 0.
+test('aiLevelsFor', () => {
+  assert.equal(aiLevelsFor('high', 64), 6);
+  assert.equal(aiLevelsFor('high', 16), 4);
+  assert.equal(aiLevelsFor('fast', 64), 2);
+  assert.equal(aiLevelsFor('fast', 2), 1);
+  assert.equal(aiLevelsFor('none', 64), 0);
 });

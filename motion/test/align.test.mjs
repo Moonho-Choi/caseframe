@@ -46,3 +46,17 @@ test('warpImage returns cropped ImageData', async () => {
   const out = warpImage(cv, img, similarity(1, 0, 0, 0), 64, 48, 0.05);
   assert.equal(out.width, 48); assert.equal(out.height, 32); assert.equal(out.data[0], 200);
 });
+
+// 정합은 25장에 몇 분씩 걸리므로 중간에 취소가 들어야 한다. 예전에는 취소 여부를
+// 다 끝난 뒤에야 확인해서 취소 버튼이 사실상 듣지 않았다.
+test('chainTransforms stops with 취소 while it is still working', async () => {
+  const cv = await cvReady();
+  const W = 320, H = 240; const base = makeTexture(cv, W, H, 13);
+  const grays = [base, warpGray(cv, base, similarity(1.02, 2, 5, -4)), warpGray(cv, base, similarity(1.04, -2, -6, 5))];
+  let calls = 0;
+  await assert.rejects(
+    () => chainTransforms(cv, grays, W, H, () => { calls++; }, () => calls >= 2),
+    /취소/);
+  assert.equal(calls, 2, '사진 두 장째에서 멈춰야 한다');
+  grays.forEach(g => g.delete());
+});

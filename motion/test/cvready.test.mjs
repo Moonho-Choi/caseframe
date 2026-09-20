@@ -21,3 +21,20 @@ test('cvReady resolves plain cv objects (no then) as-is', async () => {
   const result = await cvReady({ cv: plain });
   assert.equal(result, plain);
 });
+
+// then을 지울 수 없게 박아 둔 경우(configurable:false, writable:false) — delete가
+// strict 모드에서 터지므로 cvReady는 then이 가려진 껍데기를 대신 넘겨야 한다. 이
+// 갈래가 망가지면 증상이 "아무 에러 없이 멈춤"이라 알아채기가 아주 어렵다.
+test('cvReady hides a then that cannot be deleted', async () => {
+  const fake = { Mat: function () {} };
+  Object.defineProperty(fake, 'then', { value(f) { f(fake); }, configurable: false, writable: false });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('cvReady가 2초 안에 끝나지 않음(thenable 무한 루프 의심)')), 2000));
+  const result = await Promise.race([cvReady({ cv: fake }), timeout]);
+  assert.equal(typeof result.Mat, 'function');
+  assert.equal(result.then, undefined, 'then이 가려지지 않았다');
+  assert.equal(result.Mat, fake.Mat, '나머지 속성은 그대로 읽혀야 한다');
+});
+
+test('cvReady rejects with a Korean message when cv never arrives', async () => {
+  await assert.rejects(() => cvReady({}, 30), /OpenCV를 불러오지 못했습니다/);
+});

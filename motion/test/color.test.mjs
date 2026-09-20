@@ -30,3 +30,13 @@ test('flat image has no banding when matched', async () => {
   }
   assert.ok(maxR - minR <= 8, `R channel range ${maxR - minR} should be ≤ 8, got min=${minR} max=${maxR}`);
 });
+
+// 밝기·색 맞추기도 25장이면 수 초씩 걸리는 구간이라 취소가 들어야 한다.
+test('matchColors stops with 취소', async () => {
+  const mk = v => ({ width: 4, height: 4, data: new Uint8ClampedArray(64).map((_, i) => (i % 4 === 3 ? 255 : v)) });
+  let seen = 0;
+  await assert.rejects(
+    () => matchColors([mk(60), mk(120), mk(180)], () => { seen++; }, () => seen >= 2),
+    /취소/);
+  assert.equal(seen, 2);
+});
