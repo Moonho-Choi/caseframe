@@ -1,6 +1,8 @@
 export function planTiming(stepSec) {
   const N = Math.min(64, 2 ** Math.ceil(Math.log2(30 * stepSec)));
-  return { N, fps: Math.min(60, N / stepSec) };
+  // fps는 정수여야 한다 — mp4-muxer/VideoEncoder가 정수가 아닌 frameRate를 거부한다
+  // ("Invalid video frame rate ... Must be a positive integer.").
+  return { N, fps: Math.min(60, Math.round(N / stepSec)) };
 }
 export function imageToCHW(img) {
   const { width: w, height: h, data } = img; const n = w * h; const out = new Float32Array(3 * n);
