@@ -13,23 +13,38 @@ const MAX = 40;
 
 function setMsg(t) { $('msg').textContent = t || ''; }
 function progress(stage, i, n) { $('stage').textContent = n ? `${stage} ${i}/${n}` : stage; $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%'; }
+// 만들기(make)가 도는 동안에는 사진 줄을 건드릴 수 없어야 한다. make()는 state.items를
+// 통째로 읽어 T(변환 배열)와 길이를 맞춰 두는데, 그 사이에 한 장이라도 빼거나 순서를
+// 바꾸면 T[i]가 엉뚱한 사진에 붙거나 아예 undefined가 되어 도중에 터진다.
+function locked() { return state.busy || state.loading; }
 function renderStrip() {
   const s = $('strip'); s.innerHTML = '';
+  const lock = locked();
+  $('drop').classList.toggle('off', lock);
   state.items.forEach((it, i) => {
-    const d = document.createElement('div'); d.className = 'thumb'; d.draggable = true; d.dataset.i = i;
+    const d = document.createElement('div'); d.className = 'thumb'; d.draggable = !lock;
     const f = state.flags[i]; if (f && f.warn === 'flip') d.classList.add('warn-flip'); if (f && f.warn === 'other') d.classList.add('warn-other'); if (state.status[i] === 'fail') d.classList.add('fail');
     const c = document.createElement('canvas'); c.width = it.image.width; c.height = it.image.height; c.getContext('2d').putImageData(it.image, 0, 0);
     const img = document.createElement('img'); img.src = c.toDataURL('image/jpeg', 0.6); d.appendChild(img);
     const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = `${i + 1}. ${it.name}` + (f && f.warn === 'flip' ? ' (자동 뒤집음)' : f && f.warn === 'other' ? ' (다른 방향?)' : ''); d.appendChild(cap);
     const b = document.createElement('div'); b.className = 'btns';
-    for (const [t, fn] of [['◀', () => move(i, -1)], ['▶', () => move(i, 1)], ['⇄', () => flip(i)], ['✕', () => remove(i)]]) { const x = document.createElement('button'); x.textContent = t; x.onclick = fn; b.appendChild(x); }
+    for (const [t, fn] of [['◀', () => move(i, -1)], ['▶', () => move(i, 1)], ['⇄', () => flip(i)], ['✕', () => remove(i)]]) { const x = document.createElement('button'); x.textContent = t; x.onclick = fn; x.disabled = lock; b.appendChild(x); }
     d.appendChild(b);
-    d.ondragstart = e => e.dataTransfer.setData('text/plain', i);
+    d.ondragstart = e => { if (lock) { e.preventDefault(); return; } e.dataTransfer.setData('text/plain', String(i)); };
     d.ondragover = e => e.preventDefault();
-    d.ondrop = e => { e.preventDefault(); const from = +e.dataTransfer.getData('text/plain'); moveTo(from, i); };
+    // 운영체제에서 끌어온 파일은 text/plain이 빈 문자열이라 +'' === 0이 되고, 예전에는
+    // 그게 moveTo(0, i)로 해석되어 사진 1이 슬쩍 옮겨지고 끌어온 파일은 사라졌다.
+    // 파일이 실려 있으면 순서 바꾸기가 아니라 "사진 추가"로 보낸다.
+    d.ondrop = e => {
+      e.preventDefault(); e.stopPropagation();
+      if (e.dataTransfer.files && e.dataTransfer.files.length) { addFiles(e.dataTransfer.files); return; }
+      const from = +e.dataTransfer.getData('text/plain');
+      if (!Number.isInteger(from) || from < 0 || from >= state.items.length) return;
+      moveTo(from, i);
+    };
     s.appendChild(d);
   });
-  $('go').disabled = state.items.length < 2 || state.busy || state.loading;
+  $('go').disabled = state.items.length < 2 || lock;
   const noDate = state.items.some(it => !it.date);
   $('label').disabled = noDate; if (noDate) $('label').checked = false;
 }
@@ -48,6 +63,8 @@ function moveTo(from, to) {
 }
 function flip(i) {
   state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: null };
+  // 사용자가 직접 정한 방향은 나중에 사진을 더 넣어도 자동 판정이 뒤엎지 않는다.
+  state.items[i].userFlipped = true;
   state.status = []; // 뒤집으면 이전 정합 결과가 더 이상 맞지 않는다
   renderStrip();
 }
@@ -59,7 +76,7 @@ function remove(i) {
 }
 
 async function addFiles(files) {
-  if (state.loading) return; // 이미 처리 중이면 추가로 끌어다 놓은 것은 무시
+  if (state.loading || state.busy) return; // 읽는 중이거나 영상 만드는 중이면 무시
   state.loading = true; setMsg(''); renderStrip();
   let grays = null;
   try {
@@ -80,7 +97,7 @@ async function addFiles(files) {
     const W = state.items[0].image.width;
     const res = await checkOrientation(cv, grays, W, (i, n) => progress('방향 검사 중', i, n));
     grays.forEach(g => g.delete()); grays = null;
-    res.forEach((r, i) => { if (r.flip) state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: r.warn }; });
+    applyOrientation(res, state.items.length - items.length);
   } catch (e) {
     setMsg('오류: ' + (e.message || e));
   } finally {
@@ -88,6 +105,25 @@ async function addFiles(files) {
     state.loading = false;
     progress(''); renderStrip();
   }
+}
+
+// 방향 판정은 사진 전체를 한 사슬로 이어 붙여야 정확해서 매번 전부 다시 잰다. 하지만
+// 결과를 전부에 적용하면, 사진 한 장 더 넣었을 뿐인데 사용자가 ⇄로 고쳐 둔 사진이
+// 도로 뒤집히고(기준 방향의 부호가 바뀌면 전혀 다른 묶음이 뒤집힌다) 아무 설명도 없다.
+// 그래서 판정은 "이번에 새로 들어온 사진"에만 적용하고, 이미 화면에 있던 사진은
+// 사용자가 본 그대로 둔다. 다만 이번 투표에서 기준 방향이 지난번과 반대로 잡혔다면
+// (= 기존 사진 과반이 "뒤집어라"로 나오면) 새 사진에는 부호를 되돌려 적용해야
+// 기존 사진들과 같은 방향이 된다.
+function applyOrientation(res, prevCount) {
+  let flipVotes = 0;
+  for (let i = 0; i < prevCount; i++) if (res[i].flip) flipVotes++;
+  const opposite = prevCount > 0 && flipVotes * 2 > prevCount;
+  res.forEach((r, i) => {
+    if (i < prevCount || state.items[i].userFlipped) return;
+    const doFlip = opposite ? !r.flip : r.flip;
+    if (doFlip) { state.items[i].image = flipImageData(state.items[i].image); state.items[i].thumb = null; }
+    state.flags[i] = { warn: doFlip ? 'flip' : (r.warn === 'other' ? 'other' : null) };
+  });
 }
 
 async function make() {
@@ -146,7 +182,15 @@ $('drop').onclick = () => $('file').click();
 $('file').onchange = e => addFiles(e.target.files);
 $('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');
-$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); addFiles(e.dataTransfer.files); };
+$('drop').ondrop = e => { e.preventDefault(); e.stopPropagation(); $('drop').classList.remove('over'); addFiles(e.dataTransfer.files); };
+// 사진 줄이나 넣는 칸 밖(카드 여백·설정 줄·배경)에 사진을 떨어뜨리면 브라우저 기본
+// 동작으로 그 파일 주소로 이동해 버려 작업하던 사진이 전부 날아간다. 창 전체에서
+// 기본 동작을 막고, 떨어진 파일은 그냥 사진 추가로 받아 준다.
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
 $('go').onclick = make;
 $('cancel').onclick = () => { state.cancelled = true; };
