@@ -120,9 +120,15 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
   }
 }
 
+// 잘라낸 크기는 16의 배수로 내림한다. RIFE는 내부에서 화면을 여러 번 반으로 줄이므로
+// 가로·세로가 16으로 나눠떨어지지 않으면 추론이 실패하거나 가장자리가 어긋난다
+// (예전에는 짝수만 보장해서 1280×854 → 770처럼 16의 배수가 아닌 높이가 나왔다).
+// H.264 인코더에도 16의 배수가 가장 안전하다.
 export function alignedSize(W, H, margin = 0.05) {
   const x0 = Math.floor(W * margin), y0 = Math.floor(H * margin);
-  const cw = (W - 2 * x0) - ((W - 2 * x0) % 2), ch = (H - 2 * y0) - ((H - 2 * y0) % 2);
+  const unit = 16;
+  const cw = Math.max(unit, (W - 2 * x0) - ((W - 2 * x0) % unit));
+  const ch = Math.max(unit, (H - 2 * y0) - ((H - 2 * y0) % unit));
   return { cw, ch };
 }
 

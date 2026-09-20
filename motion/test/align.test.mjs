@@ -36,13 +36,13 @@ test('medianFrame of identical transforms is identity-like', () => {
   for (let j = 0; j < 6; j++) assert.ok(Math.abs(R[j] - T[0][j]) < 1e-6);
 });
 
-test('alignedSize is even and 90% of frame', () => {
-  assert.deepEqual(alignedSize(1280, 854), { cw: 1152, ch: 770 });
+test('alignedSize is a multiple of 16 and about 90% of frame', () => {
+  assert.deepEqual(alignedSize(1280, 854), { cw: 1152, ch: 768 });
 });
 
 test('warpImage returns cropped ImageData', async () => {
   const cv = await cvReady();
   const img = { width: 64, height: 48, data: new Uint8ClampedArray(64 * 48 * 4).fill(200) };
   const out = warpImage(cv, img, similarity(1, 0, 0, 0), 64, 48, 0.05);
-  assert.equal(out.width, 58); assert.equal(out.height, 44); assert.equal(out.data[0], 200);
+  assert.equal(out.width, 48); assert.equal(out.height, 32); assert.equal(out.data[0], 200);
 });

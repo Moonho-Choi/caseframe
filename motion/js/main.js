@@ -10,6 +10,12 @@ import { cvReady } from './cvready.js';
 const $ = id => document.getElementById(id);
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
 const MAX = 40;
+// RIFE 세션(21.6MB 모델 + GPU 버퍼)은 만들기를 누를 때마다 새로 올리면 그만큼씩 쌓인다.
+// 한 번 만든 세션을 계속 돌려 쓰고, 추론이 고장난 경우에만 버린다.
+let rifeCache = null;
+// 이전 결과 영상의 object URL. 새 영상을 걸기 전에 풀어 주지 않으면 탭이 닫힐 때까지
+// 수십 MB짜리 Blob이 그대로 붙잡혀 있다.
+let lastUrl = null;
 
 function setMsg(t) { $('msg').textContent = t || ''; }
 function progress(stage, i, n) { $('stage').textContent = n ? `${stage} ${i}/${n}` : stage; $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%'; }
@@ -133,7 +139,7 @@ async function make() {
   if (state.busy || state.loading) return;
   state.busy = true; state.cancelled = false; $('go').disabled = true; $('cancel').hidden = false; $('result').hidden = true; setMsg('');
   const cancelled = () => state.cancelled;
-  let grays = null;
+  let grays = null, enc = null, rife = null;
   try {
     const cv = await cvReady();
     const W = state.items[0].image.width, H = state.items[0].image.height;
@@ -149,19 +155,28 @@ async function make() {
     const quality = $('quality').value;
     progress('인공지능 모델 준비 중');
     const ort = await import('../../vendor/ort/ort.webgpu.min.mjs'); ort.env.wasm.wasmPaths = '/vendor/ort/';
-    const rife = await Rife.create(ort, '/motion/models/rife_fp32.onnx');
+    if (!rifeCache) rifeCache = await Rife.create(ort, '/motion/models/rife_fp32.onnx');
+    rife = rifeCache;
     const aiLevels = rife ? aiLevelsFor(quality, N) : 0;
     const kind = pickEncoder(); if (!kind) throw new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬이나 엣지를 써 주세요.');
     const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch; const ctx = canvas.getContext('2d');
-    let enc;
     if (kind === 'mp4') { const Mp4Muxer = await import('../../vendor/mp4-muxer.mjs'); enc = await Mp4Encoder.create(Mp4Muxer, cw, ch, fps); }
     else enc = new WebmEncoder(canvas, fps);
     const useLabel = $('label').checked && state.items.every(it => it.date);
     const labels = state.items.map(it => useLabel ? monthsLabel(state.items[0].date, it.date) : '');
-    const chws = aligned.map(imageToCHW);
-    let idx = 0; const total = (chws.length - 1) * N + Math.round(fps);
-    for (let i = 0; i < chws.length - 1; i++) {
-      await transition(chws[i], chws[i + 1], cw, ch, N, aiLevels, rife, async f => {
+    // CHW(float32 3채널) 한 장은 1152×768 기준 약 10.6MB다. 40장을 한꺼번에 만들면
+    // 그것만 425MB이고 원본·정렬본까지 같이 살아 있어 진료실 PC가 버티지 못한다.
+    // 필요한 순간에 만들고(i, i+1 두 장만 살려 둔다) 쓴 것은 바로 버린다.
+    const n = aligned.length;
+    const chwCache = new Map();
+    const chwAt = k => {
+      let v = chwCache.get(k);
+      if (!v) { v = imageToCHW(aligned[k]); chwCache.set(k, v); aligned[k] = null; }
+      return v;
+    };
+    let idx = 0; const total = (n - 1) * N + Math.round(fps);
+    for (let i = 0; i < n - 1; i++) {
+      await transition(chwAt(i), chwAt(i + 1), cw, ch, N, aiLevels, rife, async f => {
         ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw);
         await enc.addFrame(canvas, idx++);
         // 인공지능 없이(단순 겹치기) 돌 때는 이 안쪽이 전부 마이크로태스크라 화면이 한 번도
@@ -169,20 +184,28 @@ async function make() {
         // 8장마다 한 틱 양보해 브라우저가 화면을 그리고 클릭을 처리할 틈을 준다.
         if (idx % 8 === 0) { progress('중간 그림 그리는 중', idx, total); await new Promise(r => setTimeout(r, 0)); }
       }, cancelled);
+      chwCache.delete(i);
       if (cancelled()) throw new Error('취소');
     }
-    ctx.putImageData(chwToImage(chws[chws.length - 1], cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw);
+    ctx.putImageData(chwToImage(chwAt(n - 1), cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw);
     for (let k = 0; k < Math.round(fps); k++) await enc.addFrame(canvas, idx++);
     progress('영상 파일 만드는 중');
-    const blob = await enc.finish(); rife && rife.release();
-    const url = URL.createObjectURL(blob); $('video').src = url; $('dl').href = url; $('dl').download = outputName(state.items[0].name, kind);
+    const blob = await enc.finish();
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    const url = URL.createObjectURL(blob); lastUrl = url;
+    $('video').src = url; $('dl').href = url; $('dl').download = outputName(state.items[0].name, kind);
     $('dl').textContent = kind === 'mp4' ? 'MP4 저장' : 'WebM 저장';
-    $('rnote').textContent = (rife ? '' : '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다. ') + (kind === 'webm' ? '이 브라우저에서는 WebM으로 저장됩니다.' : '');
+    $('rnote').textContent = (rife && !rife.failed ? '' : '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다. ') + (kind === 'webm' ? '이 브라우저에서는 WebM으로 저장됩니다.' : '');
     $('result').hidden = false; progress('완료', total, total);
   } catch (e) { setMsg(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e)); progress(''); }
   finally {
     if (grays) { grays.forEach(g => g.delete()); grays = null; }
+    // 오류·취소로 빠져나온 경우에도 인코더는 반드시 닫는다(성공 경로에서는 이미 닫혀 있다).
+    if (enc && enc.abort) enc.abort();
+    // 추론이 고장난 세션은 캐시에서 버리고 GPU 자원을 돌려준다.
+    if (rife && rife.failed) { try { rife.release(); } catch (e) { /* 무시 */ } if (rifeCache === rife) rifeCache = null; }
     state.busy = false; $('cancel').hidden = true; $('go').disabled = state.items.length < 2;
+    renderStrip();
   }
 }
 

@@ -27,6 +27,7 @@ export class Mp4Encoder {
     enc.muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: 'avc', width: w, height: h, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
     enc.encoder = new VideoEncoder({ output: (chunk, meta) => enc.muxer.addVideoChunk(chunk, meta), error: e => { enc.error = e; } });
     enc.encoder.configure(cfg);
+    enc.done = false;
     return enc;
   }
   async addFrame(canvas, index) {
@@ -41,8 +42,19 @@ export class Mp4Encoder {
     while (this.encoder.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 20));
   }
   async finish() {
-    await this.encoder.flush(); this.encoder.close(); this.muxer.finalize();
+    await this.encoder.flush();
+    // flush 도중에 인코더가 죽으면 지금까지 받은 조각만으로 조용히 짧은 MP4가 나온다.
+    // 에러가 있었으면 여기서 던져 "완료"로 위장하지 않는다.
+    if (this.error) throw this.error;
+    this.encoder.close(); this.done = true; this.muxer.finalize();
     return new Blob([this.muxer.target.buffer], { type: 'video/mp4' });
+  }
+  // 오류·취소로 중간에 그만둘 때 하드웨어 인코더를 놓아 준다. 이걸 안 하면 취소를
+  // 반복할수록 살아 있는 VideoEncoder가 쌓인다.
+  abort() {
+    if (this.done) return;
+    this.done = true;
+    try { if (this.encoder && this.encoder.state !== 'closed') this.encoder.close(); } catch (e) { /* 이미 닫힘 */ }
   }
 }
 

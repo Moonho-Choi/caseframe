@@ -27,7 +27,7 @@ export class Rife {
       return new Rife(ort, sess);
     } catch (e) { console.warn('RIFE 로드 실패', e); return null; }
   }
-  constructor(ort, sess) { this.ort = ort; this.sess = sess; }
+  constructor(ort, sess) { this.ort = ort; this.sess = sess; this.failed = false; }
   async mid(a, b, w, h) {
     const input = new Float32Array(a.length * 2); input.set(a, 0); input.set(b, a.length);
     const r = await this.sess.run({ input: new this.ort.Tensor('float32', input, [1, 6, h, w]) });
@@ -40,14 +40,23 @@ export class Rife {
 export function aiLevelsFor(quality, N) { return quality === 'high' ? Math.log2(N) : quality === 'fast' ? Math.min(2, Math.log2(N)) : 0; }
 
 // a에서 b 직전까지 N장을 시간 순으로 emit. levels = 남은 분할 단계, aiLevels = 그중 AI로 할 단계 수
+// 추론이 한 번이라도 실패하면(GPU 메모리 부족 등) rife.failed를 세워 두고 그 뒤로는
+// 단순 겹치기로 계속 간다 — 몇 분 기다린 끝에 "오류:"만 남기느니, 조금 무른 영상이라도
+// 끝까지 나오는 편이 낫다. 경고는 한 번만 적는다.
 export async function transition(a, b, w, h, N, aiLevels, rife, emit, isCancelled) {
   const total = Math.log2(N);
+  const usable = () => rife && !rife.failed;
   async function gen(x, y, depth, ai) {
     if (isCancelled()) return;
     if (depth === 0) { await emit(x); return; }
-    const m = (ai > 0 && rife) ? await rife.mid(x, y, w, h) : blend(x, y, 0.5);
+    let m = null;
+    if (ai > 0 && usable()) {
+      try { m = await rife.mid(x, y, w, h); }
+      catch (e) { rife.failed = true; console.warn('RIFE 추론 실패 — 남은 구간은 단순 겹치기로 만듭니다', e); m = null; }
+    }
+    if (!m) m = blend(x, y, 0.5);
     await gen(x, m, depth - 1, ai - 1);
     await gen(m, y, depth - 1, ai - 1);
   }
-  await gen(a, b, total, rife ? aiLevels : 0);
+  await gen(a, b, total, usable() ? aiLevels : 0);
 }
