@@ -17,7 +17,7 @@ test('checkOrientation flags the one mirrored photo among five', async () => {
   const grays = [];
   for (let i = 0; i < 5; i++) grays.push(warpGray(cv, base, similarity(1 + 0.02 * i, i - 2, 5 * i, -3 * i)));
   const flipped = new cv.Mat(); cv.flip(grays[2], flipped, 1); grays[2].delete(); grays[2] = flipped;
-  const r = checkOrientation(cv, grays, W);
+  const r = await checkOrientation(cv, grays, W);
   assert.deepEqual(r.map(x => x.flip), [false, false, true, false, false]);
   assert.equal(r[2].warn, 'flip');
   grays.forEach(g => g.delete()); base.delete();

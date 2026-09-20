@@ -74,7 +74,12 @@ export function medianFrame(T, W, H) {
   return new Float64Array([a, -b, cx - (a * W / 2 - b * H / 2), b, a, cy - (b * W / 2 + a * H / 2)]);
 }
 
-export function chainTransforms(cv, grays, W, H, onProgress) {
+function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
+
+// ECC 정합(runEcc)이 사진 한 장마다 수백 ms씩 걸릴 수 있어, 25장 넘게 돌리면
+// 메인 스레드가 오래 막힌다. 사진 한 장을 끝낼 때마다 onProgress로 알리고
+// setTimeout(0)으로 한 틱 양보해 진행 화면이 실제로 갱신되게 한다.
+export async function chainTransforms(cv, grays, W, H, onProgress) {
   const n = grays.length;
   const F = grays.map(g => detect(cv, g));
   const T = [identity()]; const status = ['ok'];
@@ -89,6 +94,7 @@ export function chainTransforms(cv, grays, W, H, onProgress) {
     else { const e = eccEuclid(cv, grays[i - 1], grays[i], W); bj = i - 1; if (e) { M = e; st = 'ecc'; } else { M = identity(); st = 'fail'; } }
     T.push(compose(T[bj], M)); status.push(st);
     onProgress && onProgress(i + 1, n);
+    await yieldToUI();
   }
   F.forEach(f => f.delete());
   const inv = invert(medianFrame(T, W, H));

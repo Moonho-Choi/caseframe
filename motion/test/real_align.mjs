@@ -11,7 +11,7 @@ const items = files.map(f => { const [w, h] = f.match(/(\d+)x(\d+)\.rgba$/).slic
 const W = items[0].image.width, H = items[0].image.height;
 const t0 = Date.now();
 const grays = items.map(it => toGray(cv, it.image));
-const { T, status } = chainTransforms(cv, grays, W, H, (i, n) => process.stdout.write(`\r${i}/${n}`));
+const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => process.stdout.write(`\r${i}/${n}`));
 console.log('\nstatus', status.join(' '), 'time', ((Date.now() - t0) / 1000).toFixed(1), 's');
 // 이웃 일치도 (맥 파이썬과 같은 정의): 640x427로 축소 → 7x7 블러 → 위아래 60px/좌우 80px 잘라낸
 // 가운데 영역의 정규화 상관 평균

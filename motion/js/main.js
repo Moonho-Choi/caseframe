@@ -7,7 +7,7 @@ import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } fro
 import { pickEncoder, Mp4Encoder, WebmEncoder, drawLabel, outputName } from './encode.js';
 
 const $ = id => document.getElementById(id);
-const state = { items: [], flags: [], status: [], cancelled: false, busy: false };
+const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
 const MAX = 40;
 
 function cvReady() {
@@ -32,44 +32,78 @@ function renderStrip() {
     d.ondrop = e => { e.preventDefault(); const from = +e.dataTransfer.getData('text/plain'); moveTo(from, i); };
     s.appendChild(d);
   });
-  $('go').disabled = state.items.length < 2 || state.busy;
+  $('go').disabled = state.items.length < 2 || state.busy || state.loading;
   const noDate = state.items.some(it => !it.date);
   $('label').disabled = noDate; if (noDate) $('label').checked = false;
 }
+// state.status(정합 성공/실패 표시)는 chainTransforms가 채운 배열이라 items/flags와
+// 길이·순서가 항상 같아야 한다. 어긋나면(예: 아직 한 번도 만들기를 안 돌렸거나, 다른
+// 조작으로 길이가 안 맞으면) 통째로 비워서 엉뚱한 사진에 회색 "구도 실패" 표시가
+// 붙는 사고를 막는다 — 어차피 사진 구성이 바뀌면 다시 만들기를 눌러야 최신 상태가 된다.
 function move(i, d) { moveTo(i, i + d); }
-function moveTo(from, to) { if (to < 0 || to >= state.items.length || from === to) return; const [it] = state.items.splice(from, 1); state.items.splice(to, 0, it); const [f] = state.flags.splice(from, 1); state.flags.splice(to, 0, f); renderStrip(); }
-function flip(i) { state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: null }; renderStrip(); }
-function remove(i) { state.items.splice(i, 1); state.flags.splice(i, 1); renderStrip(); }
+function moveTo(from, to) {
+  if (to < 0 || to >= state.items.length || from === to) return;
+  if (state.status.length === state.items.length) { const [st] = state.status.splice(from, 1); state.status.splice(to, 0, st); }
+  else state.status = [];
+  const [it] = state.items.splice(from, 1); state.items.splice(to, 0, it);
+  const [f] = state.flags.splice(from, 1); state.flags.splice(to, 0, f);
+  renderStrip();
+}
+function flip(i) {
+  state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: null };
+  state.status = []; // 뒤집으면 이전 정합 결과가 더 이상 맞지 않는다
+  renderStrip();
+}
+function remove(i) {
+  if (state.status.length === state.items.length) state.status.splice(i, 1);
+  else state.status = [];
+  state.items.splice(i, 1); state.flags.splice(i, 1);
+  renderStrip();
+}
 
 async function addFiles(files) {
-  setMsg('');
-  const list = [...files].slice(0, MAX - state.items.length);
-  if ([...files].length > list.length) setMsg(`한 번에 ${MAX}장까지만 넣을 수 있어 앞 ${list.length}장만 받았습니다.`);
-  progress('사진 읽는 중');
-  const { items, skipped } = await loadFiles(list, 1280);
-  if (skipped.length) setMsg(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
-  if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { setMsg('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
-  state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
-  const cv = await cvReady();
-  progress('방향 검사 중');
-  const grays = state.items.map(it => toGray(cv, it.image));
-  const W = state.items[0].image.width;
-  const res = checkOrientation(cv, grays, W);
-  grays.forEach(g => g.delete());
-  res.forEach((r, i) => { if (r.flip) state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: r.warn }; });
-  state.status = [];
-  progress(''); renderStrip();
+  if (state.loading) return; // 이미 처리 중이면 추가로 끌어다 놓은 것은 무시
+  state.loading = true; setMsg(''); renderStrip();
+  let grays = null;
+  try {
+    const arr = [...files];
+    const remain = MAX - state.items.length;
+    if (remain <= 0) { setMsg('이미 40장이 있어 더 넣을 수 없습니다.'); return; }
+    const list = arr.slice(0, remain);
+    if (arr.length > list.length) setMsg(`한 번에 ${MAX}장까지만 넣을 수 있어 앞 ${list.length}장만 받았습니다.`);
+    progress('사진 읽는 중');
+    const { items, skipped } = await loadFiles(list, 1280);
+    if (skipped.length) setMsg(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
+    if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { setMsg('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
+    state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
+    state.status = [];
+    const cv = await cvReady();
+    progress('방향 검사 중');
+    grays = state.items.map(it => toGray(cv, it.image));
+    const W = state.items[0].image.width;
+    const res = await checkOrientation(cv, grays, W, (i, n) => progress('방향 검사 중', i, n));
+    grays.forEach(g => g.delete()); grays = null;
+    res.forEach((r, i) => { if (r.flip) state.items[i].image = flipImageData(state.items[i].image); state.flags[i] = { warn: r.warn }; });
+  } catch (e) {
+    setMsg('오류: ' + (e.message || e));
+  } finally {
+    if (grays) { grays.forEach(g => g.delete()); grays = null; }
+    state.loading = false;
+    progress(''); renderStrip();
+  }
 }
 
 async function make() {
-  if (state.busy) return; state.busy = true; state.cancelled = false; $('go').disabled = true; $('cancel').hidden = false; $('result').hidden = true; setMsg('');
+  if (state.busy || state.loading) return;
+  state.busy = true; state.cancelled = false; $('go').disabled = true; $('cancel').hidden = false; $('result').hidden = true; setMsg('');
   const cancelled = () => state.cancelled;
+  let grays = null;
   try {
     const cv = await cvReady();
     const W = state.items[0].image.width, H = state.items[0].image.height;
-    const grays = state.items.map(it => toGray(cv, it.image));
-    const { T, status } = chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n));
-    grays.forEach(g => g.delete()); state.status = status; renderStrip();
+    grays = state.items.map(it => toGray(cv, it.image));
+    const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n));
+    grays.forEach(g => g.delete()); grays = null; state.status = status; renderStrip();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
     const aligned = matchColors(state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H)));
@@ -105,7 +139,10 @@ async function make() {
     $('rnote').textContent = (rife ? '' : '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다. ') + (kind === 'webm' ? '이 브라우저에서는 WebM으로 저장됩니다.' : '');
     $('result').hidden = false; progress('완료', total, total);
   } catch (e) { setMsg(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e)); progress(''); }
-  finally { state.busy = false; $('cancel').hidden = true; $('go').disabled = state.items.length < 2; }
+  finally {
+    if (grays) { grays.forEach(g => g.delete()); grays = null; }
+    state.busy = false; $('cancel').hidden = true; $('go').disabled = state.items.length < 2;
+  }
 }
 
 $('drop').onclick = () => $('file').click();

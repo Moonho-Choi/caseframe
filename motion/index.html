@@ -21,7 +21,7 @@ label.opt{display:flex;gap:6px;align-items:center;font-size:14px}
 button.primary{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:16px;cursor:pointer}
 button.primary:disabled{background:#aaa}
 #bar{height:10px;background:#eee;border-radius:5px;overflow:hidden}#bar i{display:block;height:100%;width:0;background:var(--accent)}
-#msg{color:var(--bad);font-size:14px}#note{color:var(--muted);font-size:13px}
+#msg{color:var(--bad);font-size:14px}#note,#foot{color:var(--muted);font-size:13px}
 video{max-width:100%;border-radius:8px;background:#000}
 </style></head><body><main>
 <h1>교정 진행 영상</h1>
@@ -36,5 +36,5 @@ video{max-width:100%;border-radius:8px;background:#000}
 </div>
 <div class="card"><div id="bar"><i></i></div><div id="stage"></div></div>
 <div class="card" id="result" hidden><video id="video" controls></video><p><a id="dl" class="primary" style="display:inline-block;text-decoration:none">MP4 저장</a> <span id="rnote"></span></p></div>
-<p id="note">© 이음턱편한치과 · <a href="/">CaseFrame</a></p>
+<p id="foot">© 이음턱편한치과 · <a href="/">CaseFrame</a></p>
 </main><script src="../vendor/opencv.js" async></script><script type="module" src="js/main.js"></script></body></html>

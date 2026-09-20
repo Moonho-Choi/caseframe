@@ -10,7 +10,7 @@ test('chainTransforms brings 4 warped copies back onto one frame', async () => {
   const W = 640, H = 480; const base = makeTexture(cv, W, H, 11);
   const Ms = [similarity(1, 0, 0, 0), similarity(1.06, 3, 20, -10), similarity(0.95, -2, -15, 12), similarity(1.02, 1, 8, 25)];
   const grays = Ms.map(M => warpGray(cv, base, M));
-  const { T, status } = chainTransforms(cv, grays, W, H);
+  const { T, status } = await chainTransforms(cv, grays, W, H);
   assert.deepEqual(status, ['ok', 'ok', 'ok', 'ok']);
   // 모든 사진의 같은 원점(base의 (320,240))이 기준 틀에서 같은 자리로 가야 한다
   const pts = Ms.map((M, i) => { const [x, y] = apply(M, 320, 240); return apply(T[i], x, y); });
