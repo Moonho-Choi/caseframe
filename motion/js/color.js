@@ -17,7 +17,7 @@ export function labToRgb(L, a, b) {
 function stats(img) {
   const d = img.data; const s = [0, 0, 0], ss = [0, 0, 0]; let n = 0;
   for (let i = 0; i < d.length; i += 16) { const l = rgbToLab(d[i], d[i + 1], d[i + 2]); for (let c = 0; c < 3; c++) { s[c] += l[c]; ss[c] += l[c] * l[c]; } n++; }
-  const mean = s.map(v => v / n); const std = ss.map((v, c) => Math.sqrt(Math.max(v / n - mean[c] * mean[c], 1e-6)));
+  const mean = s.map(v => v / n); const std = ss.map((v, c) => Math.max(Math.sqrt(Math.max(v / n - mean[c] * mean[c], 0)), 1));
   return { mean, std };
 }
 const median = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
