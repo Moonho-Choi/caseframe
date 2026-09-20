@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDate, sortItems, monthsLabel, baseName } from '../js/load.js';
+import { parseDate, sortItems, monthsLabel, baseName, sortFiles } from '../js/load.js';
 
 test('parseDate finds YYYYMMDD', () => {
   assert.deepEqual(parseDate('임희진_20230724_143958.jpg'), new Date(2023, 6, 24));
@@ -23,4 +23,8 @@ test('baseName', () => {
   assert.equal(baseName('임희진_20230724_143958.jpg'), '임희진');
   assert.equal(baseName('IMG_0001.JPG'), 'IMG');
   assert.equal(baseName('photo.png'), 'photo');
+});
+test('sortFiles by date then name', () => {
+  const s = sortFiles([{ name: 'b.jpg' }, { name: 'a_20230101.jpg' }, { name: 'a_20220101.jpg' }]);
+  assert.deepEqual(s.map(f => f.name), ['a_20220101.jpg', 'a_20230101.jpg', 'b.jpg']);
 });

@@ -29,6 +29,16 @@ export function baseName(name) {
   return name.replace(/\.[^.]+$/, '').split('_')[0];
 }
 
+export function sortFiles(files) {
+  return [...files].sort((a, b) => {
+    const aDate = parseDate(a.name), bDate = parseDate(b.name);
+    if (aDate && bDate) return aDate - bDate;
+    if (aDate) return -1;
+    if (bDate) return 1;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+}
+
 async function decode(file) {
   if (typeof createImageBitmap === 'function') {
     try { return await createImageBitmap(file); } catch (e) { /* HEIC 등 */ }
@@ -39,7 +49,7 @@ async function decode(file) {
 export async function loadFiles(files, width = 1280) {
   const items = [], skipped = [];
   let W = width - (width % 2), H = 0;
-  for (const f of files) {
+  for (const f of sortFiles(files)) {
     const bmp = await decode(f);
     if (!bmp) { skipped.push(f.name); continue; }
     if (!H) { H = Math.round(W * bmp.height / bmp.width); H -= H % 2; }
