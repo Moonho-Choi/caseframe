@@ -22,7 +22,7 @@
 - 글씨: 왼쪽 위 반투명 검은 띠 + 흰 글씨. "시작" / "N개월" / "N년" / "N년 M개월". 날짜 없는 사진이 하나라도 있으면 글씨 자동 끄기.
 - 파일 이름: 첫 사진 이름을 `_`로 나눈 첫 토막 + `_교정진행.mp4` (WebM이면 `.webm`).
 - 마지막 사진 1초 정지.
-- 커밋 메시지는 한국어, 끝에 `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- 커밋 메시지는 한국어, 끝에 `Co-Authored-By: <커밋을 작성한 클로드 모델 이름> <noreply@anthropic.com>` (예: Claude Fable 5.1, Claude Sonnet 5 — 작성 모델을 그대로 적는다).
 - 푸시는 하지 않는다(원장이 GitHub Desktop으로).
 
 ## 파일 구조
