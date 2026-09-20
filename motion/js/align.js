@@ -76,12 +76,20 @@ export function medianFrame(T, W, H) {
 
 function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
 
-// ECC 정합(runEcc)이 사진 한 장마다 수백 ms씩 걸릴 수 있어, 25장 넘게 돌리면
-// 메인 스레드가 오래 막힌다. 사진 한 장을 끝낼 때마다 onProgress로 알리고
-// setTimeout(0)으로 한 틱 양보해 진행 화면이 실제로 갱신되게 한다.
+// ORB 특징점 추출(detect)도 사진마다 수백 ms 걸리는데, 예전에는 grays.map(detect)으로
+// n장을 한 번에 몰아서 계산해 그 시간 내내 화면이 멈춘 것처럼 보였다. ECC 정합(runEcc)도
+// 사진 한 장마다 수백 ms씩 걸릴 수 있어, 25장 넘게 돌리면 메인 스레드가 오래 막힌다.
+// 그래서 (1) 특징점 추출, (2) 이웃과 이어붙이기 두 단계 모두 사진 한 장 끝낼 때마다
+// onProgress로 알리고 setTimeout(0)으로 한 틱 양보해 진행 화면이 실제로 갱신되게 한다.
+// onProgress는 총 2n번(추출 n장 + 이어붙이기 n-1장) 불린다.
 export async function chainTransforms(cv, grays, W, H, onProgress) {
   const n = grays.length;
-  const F = grays.map(g => detect(cv, g));
+  const F = [];
+  for (let i = 0; i < n; i++) {
+    F.push(detect(cv, grays[i]));
+    onProgress && onProgress(i + 1, 2 * n);
+    await yieldToUI();
+  }
   const T = [identity()]; const status = ['ok'];
   for (let i = 1; i < n; i++) {
     let best = null, bj = i - 1;
@@ -93,7 +101,7 @@ export async function chainTransforms(cv, grays, W, H, onProgress) {
     if (best) { M = eccRefine(cv, grays[bj], grays[i], best.M); st = 'ok'; }
     else { const e = eccEuclid(cv, grays[i - 1], grays[i], W); bj = i - 1; if (e) { M = e; st = 'ecc'; } else { M = identity(); st = 'fail'; } }
     T.push(compose(T[bj], M)); status.push(st);
-    onProgress && onProgress(i + 1, n);
+    onProgress && onProgress(n + i + 1, 2 * n);
     await yieldToUI();
   }
   F.forEach(f => f.delete());

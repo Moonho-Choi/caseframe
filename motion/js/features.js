@@ -29,8 +29,8 @@ export function toGray(cv, image) {
   return out;
 }
 
-export function detect(cv, gray) {
-  const orb = new cv.ORB(6000);
+export function detect(cv, gray, nfeatures = 6000) {
+  const orb = new cv.ORB(nfeatures);
   const kp = new cv.KeyPointVector(); const des = new cv.Mat(); const mask = new cv.Mat();
   orb.detectAndCompute(gray, mask, kp, des);
   const n = kp.size(); const pts = new Float32Array(2 * n);

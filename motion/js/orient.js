@@ -24,19 +24,24 @@ export function flipImageData(image) {
 
 // 640px로 줄인 사본에서 방향(뒤집힘)을 검사한다 — 원본 해상도(최대 1280px)에서 ORB
 // 6000점 검출 + 브루트포스 매칭을 25장 넘게 돌리면 메인 스레드가 수 분씩 멈춘다.
-// onProgress(i, n)은 사진 한 장(정방향+뒤집기 특징점 추출)을 끝낼 때마다 부르고,
-// 그 직후 setTimeout(0)으로 한 틱 양보해 진행 막대·글씨가 실제로 화면에 그려지게 한다.
+// 방향 검사는 정밀한 정합이 필요 없으니 ORB 특징점을 2000개로 줄여 검출 자체를 가볍게 한다.
+// 진행 콜백은 총 2n번(사진 n장 특징점 추출 + 사진 n장 비교) 불러서 두 단계 모두 눈에
+// 보이게 움직이며, 각 단계 안에서도 사진 한 장이 끝날 때마다 setTimeout(0)으로 한 틱
+// 양보해 진행 막대·글씨가 실제로 화면에 그려지게 한다(그러지 않으면 특징점 추출
+// n장·비교 n장을 각각 한 번에 몰아서 처리하며 메인 스레드가 통째로 막힌다).
+const ORB_FEATURES = 2000;
+
 export async function checkOrientation(cv, grays, W, onProgress) {
   const n = grays.length;
   const workW = Math.min(640, W);
   const small = grays.map(g => downscaleGray(cv, g, workW));
   const F = [], FF = [];
   for (let i = 0; i < n; i++) {
-    F.push(detect(cv, small[i].m));
+    F.push(detect(cv, small[i].m, ORB_FEATURES));
     const f = new cv.Mat(); cv.flip(small[i].m, f, 1);
-    FF.push(detect(cv, f));
+    FF.push(detect(cv, f, ORB_FEATURES));
     f.delete();
-    onProgress && onProgress(i + 1, n);
+    onProgress && onProgress(i + 1, 2 * n);
     await yieldToUI();
   }
   const out = [];
@@ -50,6 +55,8 @@ export async function checkOrientation(cv, grays, W, onProgress) {
     const flip = sf > so * 1.3 && sf >= 15;
     const warn = flip ? 'flip' : (so < 8 && sf < 8 ? 'other' : null);
     out.push({ flip, warn, so, sf });
+    onProgress && onProgress(n + i + 1, 2 * n);
+    await yieldToUI();
   }
   F.forEach(f => f.delete()); FF.forEach(f => f.delete());
   small.forEach(s => { if (s.owned) s.m.delete(); });
