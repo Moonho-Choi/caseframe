@@ -33,9 +33,12 @@ export class Mp4Encoder {
     if (this.error) throw this.error;
     const ts = Math.round(index * 1e6 / this.fps);
     const frame = new VideoFrame(canvas, { timestamp: ts, duration: Math.round(1e6 / this.fps) });
-    this.encoder.encode(frame, { keyFrame: index % 60 === 0 });
-    frame.close();
-    if (this.encoder.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 20));
+    try {
+      this.encoder.encode(frame, { keyFrame: index % 60 === 0 });
+    } finally {
+      frame.close();
+    }
+    while (this.encoder.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 20));
   }
   async finish() {
     await this.encoder.flush(); this.encoder.close(); this.muxer.finalize();
@@ -48,7 +51,17 @@ export class WebmEncoder {
     this.stream = canvas.captureStream(0); this.track = this.stream.getVideoTracks()[0];
     this.chunks = []; this.rec = new MediaRecorder(this.stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8e6 });
     this.rec.ondataavailable = e => e.data.size && this.chunks.push(e.data); this.rec.start(); this.fps = fps;
+    this.error = null;
+    this.rec.onerror = e => { this.error = e.error || e; };
   }
-  async addFrame() { this.track.requestFrame && this.track.requestFrame(); await new Promise(r => setTimeout(r, 1000 / this.fps)); }
-  async finish() { await new Promise(r => { this.rec.onstop = r; this.rec.stop(); }); return new Blob(this.chunks, { type: 'video/webm' }); }
+  async addFrame() {
+    if (this.error) throw this.error;
+    this.track.requestFrame && this.track.requestFrame();
+    await new Promise(r => setTimeout(r, 1000 / this.fps));
+  }
+  async finish() {
+    if (this.error) throw this.error;
+    await new Promise(r => { this.rec.onstop = r; this.rec.stop(); });
+    return new Blob(this.chunks, { type: 'video/webm' });
+  }
 }
