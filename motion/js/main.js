@@ -5,15 +5,12 @@ import { chainTransforms, warpImage, alignedSize } from './align.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
 import { pickEncoder, Mp4Encoder, WebmEncoder, drawLabel, outputName } from './encode.js';
+import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
 const MAX = 40;
 
-function cvReady() {
-  if (window.cv && typeof window.cv.then === 'function') window.cv.then(m => { window.cv = m; });
-  return new Promise(r => { const t = () => (window.cv && window.cv.Mat ? r(window.cv) : setTimeout(t, 100)); t(); });
-}
 function setMsg(t) { $('msg').textContent = t || ''; }
 function progress(stage, i, n) { $('stage').textContent = n ? `${stage} ${i}/${n}` : stage; $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%'; }
 function renderStrip() {
