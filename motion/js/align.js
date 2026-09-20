@@ -82,31 +82,42 @@ function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
 // 그래서 (1) 특징점 추출, (2) 이웃과 이어붙이기 두 단계 모두 사진 한 장 끝낼 때마다
 // onProgress로 알리고 setTimeout(0)으로 한 틱 양보해 진행 화면이 실제로 갱신되게 한다.
 // onProgress는 총 2n번(추출 n장 + 이어붙이기 n-1장) 불린다.
-export async function chainTransforms(cv, grays, W, H, onProgress) {
+// isCancelled()가 true면 그 양보 지점에서 Error('취소')를 던진다 — 25장 정합은 몇 분씩
+// 걸리는데 예전에는 다 끝난 뒤에야 취소를 확인해서 취소 버튼이 사실상 듣지 않았다.
+// 던진 예외는 아래 finally가 받아 F(특징점 Mat)를 전부 풀어 준다.
+export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) {
   const n = grays.length;
+  const stop = () => { if (isCancelled && isCancelled()) throw new Error('취소'); };
   const F = [];
-  for (let i = 0; i < n; i++) {
-    F.push(detect(cv, grays[i]));
-    onProgress && onProgress(i + 1, 2 * n);
-    await yieldToUI();
-  }
-  const T = [identity()]; const status = ['ok'];
-  for (let i = 1; i < n; i++) {
-    let best = null, bj = i - 1;
-    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
-      const r = pairTransform(cv, F[j], F[i], W);
-      if (r && (!best || r.k > best.k)) { best = r; bj = j; }
+  // detect/pairTransform/eccRefine 어디서 터지든 그때까지 만든 Feat Mat이 새지 않게
+  // try/finally로 감싼다(사진 한 장당 6000×32바이트짜리 기술자 행렬이다).
+  try {
+    for (let i = 0; i < n; i++) {
+      F.push(detect(cv, grays[i]));
+      onProgress && onProgress(i + 1, 2 * n);
+      await yieldToUI();
+      stop();
     }
-    let M, st;
-    if (best) { M = eccRefine(cv, grays[bj], grays[i], best.M); st = 'ok'; }
-    else { const e = eccEuclid(cv, grays[i - 1], grays[i], W); bj = i - 1; if (e) { M = e; st = 'ecc'; } else { M = identity(); st = 'fail'; } }
-    T.push(compose(T[bj], M)); status.push(st);
-    onProgress && onProgress(n + i + 1, 2 * n);
-    await yieldToUI();
+    const T = [identity()]; const status = ['ok'];
+    for (let i = 1; i < n; i++) {
+      let best = null, bj = i - 1;
+      for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+        const r = pairTransform(cv, F[j], F[i], W);
+        if (r && (!best || r.k > best.k)) { best = r; bj = j; }
+      }
+      let M, st;
+      if (best) { M = eccRefine(cv, grays[bj], grays[i], best.M); st = 'ok'; }
+      else { const e = eccEuclid(cv, grays[i - 1], grays[i], W); bj = i - 1; if (e) { M = e; st = 'ecc'; } else { M = identity(); st = 'fail'; } }
+      T.push(compose(T[bj], M)); status.push(st);
+      onProgress && onProgress(n + i + 1, 2 * n);
+      await yieldToUI();
+      stop();
+    }
+    const inv = invert(medianFrame(T, W, H));
+    return { T: T.map(t => compose(inv, t)), status };
+  } finally {
+    F.forEach(f => f.delete());
   }
-  F.forEach(f => f.delete());
-  const inv = invert(medianFrame(T, W, H));
-  return { T: T.map(t => compose(inv, t)), status };
 }
 
 export function alignedSize(W, H, margin = 0.05) {

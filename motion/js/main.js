@@ -93,7 +93,10 @@ async function addFiles(files) {
     state.status = [];
     const cv = await cvReady();
     progress('방향 검사 중');
-    grays = state.items.map(it => toGray(cv, it.image));
+    // toGray가 도중에 터져도 그때까지 만든 Mat이 finally에서 풀리도록 하나씩 담는다
+    // (map으로 한 번에 만들면 예외가 나는 순간 grays는 아직 null이라 전부 샌다).
+    grays = [];
+    for (const it of state.items) grays.push(toGray(cv, it.image));
     const W = state.items[0].image.width;
     const res = await checkOrientation(cv, grays, W, (i, n) => progress('방향 검사 중', i, n));
     grays.forEach(g => g.delete()); grays = null;
@@ -134,12 +137,13 @@ async function make() {
   try {
     const cv = await cvReady();
     const W = state.items[0].image.width, H = state.items[0].image.height;
-    grays = state.items.map(it => toGray(cv, it.image));
-    const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n));
+    grays = [];
+    for (const it of state.items) grays.push(toGray(cv, it.image));
+    const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
     grays.forEach(g => g.delete()); grays = null; state.status = status; renderStrip();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
-    const aligned = matchColors(state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H)));
+    const aligned = await matchColors(state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H)), (i, n) => progress('밝기·색 맞추는 중', i, n), cancelled);
     const { cw, ch } = alignedSize(W, H);
     const stepSec = +$('step').value, { N, fps } = planTiming(stepSec);
     const quality = $('quality').value;
@@ -159,7 +163,11 @@ async function make() {
     for (let i = 0; i < chws.length - 1; i++) {
       await transition(chws[i], chws[i + 1], cw, ch, N, aiLevels, rife, async f => {
         ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw);
-        await enc.addFrame(canvas, idx++); if (idx % 8 === 0) progress('중간 그림 그리는 중', idx, total);
+        await enc.addFrame(canvas, idx++);
+        // 인공지능 없이(단순 겹치기) 돌 때는 이 안쪽이 전부 마이크로태스크라 화면이 한 번도
+        // 다시 그려지지 않는다 — 진행 표시도 안 보이고 취소 클릭조차 전달되지 않았다.
+        // 8장마다 한 틱 양보해 브라우저가 화면을 그리고 클릭을 처리할 틈을 준다.
+        if (idx % 8 === 0) { progress('중간 그림 그리는 중', idx, total); await new Promise(r => setTimeout(r, 0)); }
       }, cancelled);
       if (cancelled()) throw new Error('취소');
     }

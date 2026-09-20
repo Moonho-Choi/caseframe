@@ -9,18 +9,18 @@ test('rgb<->lab roundtrip', () => {
   }
 });
 
-test('matchColors equalizes mean brightness of a dark and a bright image', () => {
+test('matchColors equalizes mean brightness of a dark and a bright image', async () => {
   const mk = v => ({ width: 8, height: 8, data: new Uint8ClampedArray(256).map((_, i) => (i % 4 === 3 ? 255 : v + ((i >> 2) % 5) * 3)) });
-  const out = matchColors([mk(60), mk(120), mk(180)]);
+  const out = await matchColors([mk(60), mk(120), mk(180)]);
   const mean = img => { let s = 0, n = 0; for (let i = 0; i < img.data.length; i += 4) { s += img.data[i]; n++; } return s / n; };
   const ms = out.map(mean);
   assert.ok(Math.abs(ms[0] - ms[1]) < 6 && Math.abs(ms[2] - ms[1]) < 6, `means ${ms}`);
 });
 
-test('flat image has no banding when matched', () => {
+test('flat image has no banding when matched', async () => {
   const flat = { width: 8, height: 8, data: new Uint8ClampedArray(256).fill(0).map((_, i) => (i % 4 === 3 ? 255 : 128)) };
   const mk = v => ({ width: 8, height: 8, data: new Uint8ClampedArray(256).map((_, i) => (i % 4 === 3 ? 255 : v + ((i >> 2) % 5) * 3)) });
-  const out = matchColors([flat, mk(60), mk(180)]);
+  const out = await matchColors([flat, mk(60), mk(180)]);
   const flatOut = out[0];
   let minR = 255, maxR = 0;
   for (let i = 0; i < flatOut.data.length; i += 4) {
