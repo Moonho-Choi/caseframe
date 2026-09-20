@@ -12,10 +12,13 @@ export function drawLabel(ctx, text, w) {
   ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(text, pad, band / 2);
   ctx.restore();
 }
+// 'mp4'(WebCodecs 있음) 아니면 null. 예전에는 MediaRecorder로 WebM을 만드는 예비
+// 경로가 있었지만, (1) 사파리 16.4+·파이어폭스 130+도 VideoEncoder를 갖고 있어 그
+// 경로가 실제로 고른 적이 없고, (2) MediaRecorder는 실제 시계로 녹화해서 프레임마다
+// 계산이 걸리는 만큼 영상 길이가 몇 배로 늘어난다. 브라우저에서 한 번도 돌려 본 적
+// 없는 코드를 "사파리 지원"이라고 내보내느니, 크롬·엣지를 쓰라고 분명히 안내한다.
 export function pickEncoder() {
-  if (typeof VideoEncoder === 'function' && typeof VideoEncoder.isConfigSupported === 'function') return 'mp4';
-  if (typeof MediaRecorder === 'function') return 'webm';
-  return null;
+  return (typeof VideoEncoder === 'function' && typeof VideoEncoder.isConfigSupported === 'function') ? 'mp4' : null;
 }
 
 export class Mp4Encoder {
@@ -55,25 +58,5 @@ export class Mp4Encoder {
     if (this.done) return;
     this.done = true;
     try { if (this.encoder && this.encoder.state !== 'closed') this.encoder.close(); } catch (e) { /* 이미 닫힘 */ }
-  }
-}
-
-export class WebmEncoder {
-  constructor(canvas, fps) {
-    this.stream = canvas.captureStream(0); this.track = this.stream.getVideoTracks()[0];
-    this.chunks = []; this.rec = new MediaRecorder(this.stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8e6 });
-    this.rec.ondataavailable = e => e.data.size && this.chunks.push(e.data); this.rec.start(); this.fps = fps;
-    this.error = null;
-    this.rec.onerror = e => { this.error = e.error || e; };
-  }
-  async addFrame() {
-    if (this.error) throw this.error;
-    this.track.requestFrame && this.track.requestFrame();
-    await new Promise(r => setTimeout(r, 1000 / this.fps));
-  }
-  async finish() {
-    if (this.error) throw this.error;
-    await new Promise(r => { this.rec.onstop = r; this.rec.stop(); });
-    return new Blob(this.chunks, { type: 'video/webm' });
   }
 }

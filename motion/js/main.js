@@ -4,7 +4,7 @@ import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize } from './align.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
-import { pickEncoder, Mp4Encoder, WebmEncoder, drawLabel, outputName } from './encode.js';
+import { pickEncoder, Mp4Encoder, drawLabel, outputName } from './encode.js';
 import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
@@ -158,10 +158,10 @@ async function make() {
     if (!rifeCache) rifeCache = await Rife.create(ort, '/motion/models/rife_fp32.onnx');
     rife = rifeCache;
     const aiLevels = rife ? aiLevelsFor(quality, N) : 0;
-    const kind = pickEncoder(); if (!kind) throw new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬이나 엣지를 써 주세요.');
+    if (!pickEncoder()) throw new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬이나 엣지를 써 주세요.');
     const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch; const ctx = canvas.getContext('2d');
-    if (kind === 'mp4') { const Mp4Muxer = await import('../../vendor/mp4-muxer.mjs'); enc = await Mp4Encoder.create(Mp4Muxer, cw, ch, fps); }
-    else enc = new WebmEncoder(canvas, fps);
+    const Mp4Muxer = await import('../../vendor/mp4-muxer.mjs');
+    enc = await Mp4Encoder.create(Mp4Muxer, cw, ch, fps);
     const useLabel = $('label').checked && state.items.every(it => it.date);
     const labels = state.items.map(it => useLabel ? monthsLabel(state.items[0].date, it.date) : '');
     // CHW(float32 3채널) 한 장은 1152×768 기준 약 10.6MB다. 40장을 한꺼번에 만들면
@@ -193,9 +193,9 @@ async function make() {
     const blob = await enc.finish();
     if (lastUrl) URL.revokeObjectURL(lastUrl);
     const url = URL.createObjectURL(blob); lastUrl = url;
-    $('video').src = url; $('dl').href = url; $('dl').download = outputName(state.items[0].name, kind);
-    $('dl').textContent = kind === 'mp4' ? 'MP4 저장' : 'WebM 저장';
-    $('rnote').textContent = (rife && !rife.failed ? '' : '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다. ') + (kind === 'webm' ? '이 브라우저에서는 WebM으로 저장됩니다.' : '');
+    $('video').src = url; $('dl').href = url; $('dl').download = outputName(state.items[0].name, 'mp4');
+    $('dl').textContent = 'MP4 저장';
+    $('rnote').textContent = rife && !rife.failed ? '' : '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다.';
     $('result').hidden = false; progress('완료', total, total);
   } catch (e) { setMsg(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e)); progress(''); }
   finally {
@@ -207,6 +207,15 @@ async function make() {
     state.busy = false; $('cancel').hidden = true; $('go').disabled = state.items.length < 2;
     renderStrip();
   }
+}
+
+// M8: 인공지능(RIFE)은 WebGPU가 있어야 돈다. 예전에는 만들기를 누르고 몇 분 지난
+// 뒤에야 "빠른 방식으로 만들었습니다"라고 알려 줬다. 화면을 열 때 미리 확인해서
+// 품질을 "빠르게"로 고정하고 이유를 그 자리에 적어 둔다.
+if (typeof navigator === 'undefined' || !navigator.gpu) {
+  $('quality').value = 'fast';
+  $('quality').disabled = true;
+  $('gpunote').textContent = '이 컴퓨터는 인공지능 그림을 쓸 수 없어 "빠르게"로 고정됩니다.';
 }
 
 $('drop').onclick = () => $('file').click();

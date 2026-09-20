@@ -13,14 +13,21 @@
 //
 // Node 테스트(motion/test/_cv.mjs)는 원래 Proxy로 then을 가려서 이 문제를 피해 왔다 —
 // 브라우저에서 실제로 쓰는 이 함수도 같은 방어를 하도록 옮겨 왔다.
-export function cvReady(win = globalThis.window) {
+// timeoutMs를 넘겨도 cv가 준비되지 않으면 거절한다. 예전에는 무한히 100ms마다 다시
+// 확인만 해서, opencv.js(11MB) 요청이 막히면 "사진 읽는 중"에서 영원히 멈춘 채
+// 아무 메시지도 안 나오고 그 뒤로 끌어다 놓는 사진도 전부 조용히 무시됐다.
+export function cvReady(win = globalThis.window, timeoutMs = 30000) {
   // 아직 Module 자체가 thenable인 초기 단계: then(cb)을 한 번 걸어 두면 Emscripten이
   // calledRun 이후 cb(Module)을 불러 주는데, 이때 win.cv를 그 결과로 덮어써 둔다.
   // 이건 콜백을 등록하는 것일 뿐 Promise를 그 값으로 resolve하는 게 아니므로 안전하다.
   if (win.cv && typeof win.cv.then === 'function') win.cv.then(m => { win.cv = m; });
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
     const tick = () => {
-      if (!(win.cv && win.cv.Mat)) { setTimeout(tick, 100); return; }
+      if (!(win.cv && win.cv.Mat)) {
+        if (Date.now() - t0 >= timeoutMs) { reject(new Error('OpenCV를 불러오지 못했습니다. 새로고침해 주세요.')); return; }
+        setTimeout(tick, 100); return;
+      }
       const cv = win.cv;
       try { delete cv.then; } catch (e) { /* 지워지지 않으면 아래서 Proxy로 가린다 */ }
       if (typeof cv.then === 'function') resolve(new Proxy(cv, { get: (t, p) => (p === 'then' ? undefined : t[p]) }));
