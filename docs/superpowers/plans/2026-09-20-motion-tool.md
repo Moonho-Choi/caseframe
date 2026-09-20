@@ -53,7 +53,7 @@ caseframe/
 - 변환 `M`은 `Float64Array(6)` = `[a, b, tx, c, d, ty]` (2×3 행 우선). 유사변환이면 `a=d, b=-c`.
 - 회색 특징 `Feat = { pts: Float32Array(2n), des: cv.Mat(CV_8U n×32), n: number, delete(): void }`.
 
-시험 실행: `cd caseframe && node --test motion/test/` (opencv.js는 `vendor/opencv.js`를 `require`로 읽는다. 초기화는 `await cvReady()`).
+시험 실행: `cd caseframe && node --test 'motion/test/*.test.mjs'` (폴더 이름만 주면 이 Node 버전에서는 안 돌아간다. 도우미 `_cv.mjs`, `_synth.mjs`는 `.test.mjs`가 아니므로 제외된다) (opencv.js는 `vendor/opencv.js`를 `require`로 읽는다. 초기화는 `await cvReady()`).
 
 ---
 
@@ -114,7 +114,7 @@ test('opencv.js loads with ORB, BFMatcher, findTransformECC, CLAHE', async () =>
     assert.equal(typeof cv[n], 'function', n);
 });
 ```
-Run: `cd /Users/eumtmj/Documents/이음랩/caseframe && node --test motion/test/`
+Run: `node --test 'motion/test/*.test.mjs'`
 Expected: 1 pass. (opencv.js 초기화에 5~8초 걸림.)
 
 - [ ] **Step 4: 커밋**
@@ -1397,7 +1397,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 1: 전체 시험 실행**
 
-Run: `node --test motion/test/` → 전부 pass.
+Run: `node --test 'motion/test/*.test.mjs'` → 전부 pass.
 
 - [ ] **Step 2: 맥 결과와 비교**
 
