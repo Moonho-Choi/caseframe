@@ -147,21 +147,31 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 #video{flex:1;min-height:0;width:100%;height:100%;object-fit:contain;background:#000;border-radius:8px}
 .video-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
-/* 크게 보기(뷰어): 영상 화면과 같은 자리·같은 크기로 판을 덮는다 (회전 설계 §2) */
+/* 크게 보기(뷰어) = 수동 맞춤 모드: 영상 화면과 같은 자리·같은 크기로 판을 덮는다 (수동 맞춤 설계 §2) */
 #viewer{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg)}
 #viewer[hidden]{display:none}
-.view-cap{flex:none;text-align:center;color:#c7d2dc;font-size:12.5px;min-height:17px}
+/* 캡션은 지금의 두 배(18px 굵게) — 어느 사진을 손보는 중인지 멀리서도 보인다 */
+.view-cap{flex:none;text-align:center;color:var(--text);font-size:18px;font-weight:700;min-height:24px}
+#viewZoom{color:var(--muted);font-size:12px;font-weight:400;margin-left:6px}
 .view-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000;border-radius:8px}
 #viewCanvas{max-width:100%;max-height:100%;display:block;touch-action:none}
-/* 확대한 동안에만 "끌 수 있다"는 손 모양으로 바꾼다 (회전 설계 §2) */
-#viewCanvas.zoom{cursor:grab}
-#viewCanvas.zoom.drag{cursor:grabbing}
-.view-rot{flex:none;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}
-.view-rot input[type=range]{width:min(420px,42vw)}
-#rotValue{min-width:54px;text-align:right;color:var(--text);font-size:13px;font-weight:700}
-.view-rot label.check{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text)}
-.view-rot input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
-.view-rot input:disabled+span{opacity:.4}
+/* 맞춤 모드에서는 사진을 끌어 옮길 수 있다는 손 모양으로 바꾼다 */
+#viewCanvas.adjust{cursor:grab}
+#viewCanvas.adjust.drag{cursor:grabbing}
+#viewCanvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* 구도가 아직 준비되지 않은 상태: 안내 + 각도 검사 버튼 */
+.view-need{flex:none;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--warn);font-size:13px}
+.view-need[hidden]{display:none}
+.btn.check-sm{color:#fff;border-color:rgba(77,163,255,.55);font-weight:700;background:linear-gradient(180deg,#4DA3FF,#1E6FD9)}
+.view-adjust{flex:none;display:flex;flex-direction:column;gap:6px}
+.view-adjust[hidden]{display:none}
+.adj-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.adj-name{color:var(--text);font-weight:700}
+.adj-row input[type=range]{width:min(300px,26vw);accent-color:var(--accent)}
+.adj-val{min-width:62px;text-align:right;color:var(--text);font-size:13px;font-weight:700}
+.btn.tiny{min-height:26px;padding:0 11px;font-size:15px;font-weight:700}
+.adj-row select{padding:5px 8px;color:var(--text);font:inherit;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:#18222d}
+.adj-row select:disabled{opacity:.4}
 .view-hint{color:var(--muted);font-size:10.5px}
 .view-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
@@ -312,23 +322,41 @@ body.drag #drop{display:block}
       </div>
     </div>
     <div id="viewer" hidden>
-      <div class="view-cap" id="viewCap"></div>
-      <div class="view-stage"><canvas id="viewCanvas"></canvas></div>
-      <div class="view-rot">
-        <span id="rotLabel">미세회전</span>
-        <input id="rotSlider" type="range" min="-10" max="10" step="0.5" value="0" aria-labelledby="rotLabel">
-        <span id="rotValue">0.0°</span>
-        <button class="btn" id="rotZero" title="회전을 0도로 되돌립니다">0°</button>
-        <label class="check"><input type="checkbox" id="onion"><span>앞 사진 겹쳐 보기</span></label>
-        <button class="btn" id="viewFit" title="확대를 원래 크기로 되돌립니다 (0)" disabled>맞춤</button>
-        <span class="view-hint">휠을 굴리면 확대(최대 4배) · 확대한 뒤 끌면 이동</span>
+      <div class="view-cap"><span id="viewCap"></span><span id="viewZoom"></span></div>
+      <div class="view-stage" id="viewStage"><canvas id="viewCanvas" tabindex="0"></canvas></div>
+      <div class="view-need" id="viewNeedCheck" hidden>
+        <span id="viewNeedText">먼저 각도 검사를 하면 앞뒤 사진과 맞출 수 있습니다</span>
+        <button class="btn check-sm" id="viewRunCheck">각도 검사</button>
+      </div>
+      <div class="view-adjust" id="viewAdjust" hidden>
+        <div class="adj-row">
+          <span class="adj-name" id="adjScaleLabel">크기</span>
+          <button class="btn tiny" id="adjScaleDown" title="0.01만큼 작게" aria-label="크기 줄이기">−</button>
+          <input id="adjScale" type="range" min="0.5" max="2" step="0.01" value="1" aria-labelledby="adjScaleLabel">
+          <button class="btn tiny" id="adjScaleUp" title="0.01만큼 크게" aria-label="크기 키우기">+</button>
+          <span class="adj-val" id="adjScaleValue">1.00배</span>
+          <span class="adj-name" id="adjRotLabel">회전</span>
+          <input id="adjRot" type="range" min="-10" max="10" step="0.25" value="0" aria-labelledby="adjRotLabel">
+          <span class="adj-val" id="adjRotValue">0.00°</span>
+        </div>
+        <div class="adj-row">
+          <label class="adj-name" for="onionMode">겹쳐 보기</label>
+          <select id="onionMode">
+            <option value="none">없음</option>
+            <option value="prev" selected>앞 사진</option>
+            <option value="next">뒤 사진</option>
+          </select>
+          <button class="btn" id="adjReset" title="이 사진의 수동 맞춤을 처음으로 되돌립니다">되돌리기</button>
+          <span class="view-hint">사진을 끌면 이동(화살표 키 1px · Shift 10px) · 휠은 보기 확대(최대 4배) · 청록 점선 안쪽만 영상에 들어갑니다</span>
+        </div>
       </div>
       <div class="view-actions">
         <button class="btn" id="viewPrev" title="앞 사진 (←)">◀ 이전</button>
         <button class="btn" id="viewNext" title="뒤 사진 (→)">다음 ▶</button>
         <button class="btn" id="viewFlip" title="좌우 뒤집기">⇄ 뒤집기</button>
         <button class="btn" id="viewExclude" title="영상에서 빼기">✕ 빼기</button>
-        <button class="btn primary" id="viewClose" title="닫기 (Esc)">닫기</button>
+        <button class="btn" id="viewFit" title="보기 확대를 원래대로 (0)" disabled>맞춤</button>
+        <button class="btn primary" id="viewClose" title="닫기 (Esc · 사진 더블클릭)">닫기</button>
       </div>
     </div>
     <div id="videoWrap" hidden>
@@ -386,8 +414,8 @@ body.drag #drop{display:block}
         25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
         노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
         ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.<br>
-        사진을 클릭하면 크게 보입니다. 거기서 슬라이더로 미세회전하고, 앞 사진을 겹쳐 볼 수 있습니다(Esc 닫기, ←/→ 이동).<br>
-        크게 보기에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(끌어서 이동, 0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.
+        사진을 클릭하면 크게 보면서 손으로 맞출 수 있습니다. 각도 검사를 한 뒤에 들어가면 자동으로 맞춘 구도 위에서 크기·회전·위치를 손봅니다(Esc나 더블클릭으로 닫기, ←/→ 이동).<br>
+        맞춤 화면에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.
       </div>
     </div>
   </aside>

@@ -1,15 +1,17 @@
 import { loadFiles, monthsLabel, dateLabel, baseName } from './load.js';
-import { toGray } from './features.js';
+import { toGray, compose } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
-import { chainTransforms, warpImage, alignedSize, neighborScores } from './align.js';
+import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores } from './align.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
 import { pickEncoder, Mp4Encoder, drawLabel, outputName } from './encode.js';
 import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
-// cache: 각도 검사에서 얻은 구도 맞추기 결과({ key, T, status, aligned }). aligned는 밝기·색을
-//        맞추기 **전**의 기준 틀 사진이라 영상 만들기가 그대로 이어받을 수 있다 (각도 검사 설계 §4).
+// cache: 각도 검사에서 얻은 구도 맞추기 결과({ key, T, status }). 제일 오래 걸리는 단계라
+//        영상 만들기가 그대로 이어받는다 (각도 검사 설계 §4). 기준 틀 사진은 담지 않는다 —
+//        수동 맞춤이 바뀔 때마다 낡아 버리므로 필요할 때 warpImage로 다시 만든다
+//        (25장 1~2초, 수동 맞춤 설계 §1).
 // angle:  각도 검사 결과({ scores, threshold, median, flagged:Set }).
 // job:    지금 도는 일 — 'make'(영상 만들기) 또는 'check'(각도 검사). 버튼 글씨·진행 몫이 다르다.
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false, cache: null, angle: null, job: 'make' };
@@ -172,57 +174,39 @@ function etaUpdate(done, total) {
   $('eta').textContent = m ? `남은 시간 약 ${m}분 ${s}초` : `남은 시간 약 ${s}초`;
 }
 
-// ── 사진 한 장 다시 만들기 (뒤집기·회전) ──────────────────────
-// 사진 한 장은 세 가지로 적어 둔다 (회전 설계 §3).
+// ── 사진 한 장 다시 만들기 (뒤집기) ───────────────────────────
+// 사진 한 장은 이렇게 적어 둔다 (수동 맞춤 설계 §1).
 //   it.original — 읽은 직후의 ImageData. 절대 손대지 않는다.
 //   it.flipped  — 좌우 뒤집힘(자동 판정 + 사용자 ⇄의 최종 상태)
-//   it.rotation — 미세회전(도, 기본 0)
-// it.image(표시·계산용)는 언제나 original에서 "뒤집기 → 회전" 순으로 **다시** 만든다.
-// 예전처럼 image를 그때그때 덮어쓰면 뒤집기·회전을 반복할수록 다시 표본한 그림이
-// 쌓여 화질이 깎인다. 원본에서 한 번에 만들면 몇 번을 고쳐도 손실이 한 번뿐이다.
-function degLabel(deg) { return `${deg > 0 ? '+' : deg < 0 ? '-' : ''}${Math.abs(deg).toFixed(1)}°`; }
-// 회전하면 네 모서리가 비는데, 검게 두면 영상에서 그 자리가 깜빡인다. OpenCV의
-// BORDER_REPLICATE와 비슷한 효과를 캔버스만으로 내려고, 회전한 사진을 얹기 전에
-// 같은 사진을 살짝 키워(빈 모서리를 덮을 만큼) 바탕에 깔아 둔다 (설계 §3).
-function coverScale(deg) {
-  const r = Math.abs(deg) * Math.PI / 180;
-  return Math.cos(r) + Math.sin(r);
-}
-// ctx 변환만으로 "뒤집기 → 회전"을 한 번에 그린다. 뷰어 미리보기와 rotateImageData가
-// 같은 함수를 쓰므로, 슬라이더로 본 그림과 실제로 적용되는 그림이 어긋나지 않는다.
-function drawOriented(ctx, src, w, h, deg, flipped) {
-  const s = coverScale(deg);
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  if (flipped) ctx.scale(-1, 1);
-  ctx.drawImage(src, -w * s / 2, -h * s / 2, w * s, h * s);   // 빈 모서리를 채울 바탕
-  ctx.restore();
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(deg * Math.PI / 180);
-  if (flipped) ctx.scale(-1, 1);
-  ctx.drawImage(src, -w / 2, -h / 2, w, h);
-  ctx.restore();
-}
+//   it.adjust   — 수동 맞춤 { scale, rotation, dx, dy }. 사진 픽셀은 건드리지 않고
+//                 구도 맞추기 변환 위에 덧붙는 값이다(영상·각도 검사에만 반영).
+// it.image(표시·계산용)는 언제나 original에서 다시 만든다. 예전처럼 image를 그때그때
+// 덮어쓰면 고칠수록 다시 표본한 그림이 쌓여 화질이 깎인다.
+function degLabel(deg) { return `${deg > 0 ? '+' : deg < 0 ? '-' : ''}${Math.abs(deg).toFixed(2)}°`; }
 function canvasOf(image) {
   const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
   c.getContext('2d').putImageData(image, 0, 0);
   return c;
 }
-// 뒤집기도 회전도 없으면 original을 그대로 가리킨다(사진 한 장이 4.4MB라 사본을 하나
-// 덜 만든다). 그래서 it.image의 픽셀을 그 자리에서 고치면 안 된다 — 고칠 일이 있으면
+// 뒤집지 않았으면 original을 그대로 가리킨다(사진 한 장이 4.4MB라 사본을 하나 덜
+// 만든다). 그래서 it.image의 픽셀을 그 자리에서 고치면 안 된다 — 고칠 일이 있으면
 // 여기서 새로 만든다.
 function rebuildImage(it) {
-  const deg = it.rotation || 0;
-  if (!deg && !it.flipped) { it.image = it.original; it.thumb = null; return; }
-  if (!deg) { it.image = flipImageData(it.original); it.thumb = null; return; }
-  const w = it.original.width, h = it.original.height;
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-  drawOriented(ctx, canvasOf(it.original), w, h, deg, !!it.flipped);
-  it.image = ctx.getImageData(0, 0, w, h);
+  it.image = it.flipped ? flipImageData(it.original) : it.original;
   it.thumb = null;
 }
+
+// ── 수동 맞춤 값 ──────────────────────────────────────────────
+// 자동 구도 맞추기가 어긋난 사진을 원장이 손으로 맞추는 값이다. 기본값이면 "손질 없음".
+function newAdjust() { return { ...DEFAULT_ADJUST }; }
+function adjustOf(it) { if (!it.adjust) it.adjust = newAdjust(); return it.adjust; }
+function isAdjusted(it) {
+  const a = it.adjust;
+  return !!a && (a.scale !== 1 || a.rotation !== 0 || a.dx !== 0 || a.dy !== 0);
+}
+function resetAdjust(it) { it.adjust = newAdjust(); }
+// 최종 변환 = 자동 구도 맞추기(T) 뒤에 손 보정. 영상·각도 검사·맞춤 화면이 모두 이것을 쓴다.
+function finalT(it, T) { return compose(adjustMatrix(it.adjust, it.image.width, it.image.height), T); }
 
 // ── 사진 그리기 (격자와 사진 줄은 같은 state.items에서 그린다) ──
 // 작은 그림은 만들 때마다 1280px 원본을 JPEG로 다시 짜내야 해서 40장이면 화살표 한
@@ -247,9 +231,8 @@ function badgesFor(i) {
   if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음', '']);
   else if (f && f.warn === 'other') out.push(['other', '다른 방향?', '']);
   if (state.status[i] === 'fail') out.push(['fail', '구도 실패', '']);
-  // 미세회전한 사진에는 청록 배지를 붙여, 크게 보기에서 손댄 사진을 격자에서도 알아본다 (회전 설계 §3).
-  const rot = state.items[i].rotation || 0;
-  if (rot) out.push(['rot', `회전 ${degLabel(rot)}`, '크게 보기에서 미세회전한 사진입니다']);
+  // 손으로 맞춘 사진에는 청록 배지를 붙여, 크게 보기에서 손댄 사진을 격자에서도 알아본다 (수동 맞춤 설계 §3).
+  if (isAdjusted(state.items[i])) out.push(['adjust', '수동 맞춤', '크게 보기에서 손으로 맞춘 사진입니다']);
   const a = state.angle;
   if (a && a.flagged.has(i)) out.push(['angle', '이웃과 많이 다름', `겹침 점수 ${a.scores[i].toFixed(2)} (기준 ${a.threshold.toFixed(2)})`]);
   return out;
@@ -351,30 +334,45 @@ function renderStrip() {
 }
 function render() { renderGrid(); renderStrip(); syncState(); }
 
-// ── 크게 보기 (뷰어) ──────────────────────────────────────────
-// 격자 카드를 누르면 가운데 판이 뷰어로 바뀐다. 사진을 크게 확인하고, 기울어 찍힌
-// 사진을 슬라이더로 조금 돌려 놓는 자리다 (회전 설계 §2).
-// 슬라이더 값은 "아직 적용하지 않은 값"이고, 뷰어를 닫거나 다른 사진으로 넘어갈 때
-// 한 번에 적용한다(commitRotation). 별도 "적용" 버튼은 없다.
+// ── 크게 보기 = 수동 맞춤 모드 ────────────────────────────────
+// 격자 카드를 누르면 가운데 판이 뷰어로 바뀐다. 자동 구도 맞추기가 어긋난 사진을
+// 원장이 크기·회전·이동으로 직접 맞추는 자리다 (수동 맞춤 설계 §2).
+// 슬라이더를 움직이면 it.adjust에 곧바로 들어간다 — 따로 "적용" 단계가 없다.
 let viewIdx = -1;
-let viewSrc = null;                // { it, canvas } 지금 사진의 원본 캔버스(회전 전)
-let viewOnionSrc = null;           // { key, canvas } 겹쳐 볼 앞 사진(최종본)
-// 겹쳐 보기는 "바로 앞 순서의 **포함된** 사진"과 비교한다. 뺀 사진은 영상에 없으므로
+let viewSrc = null;                // { it, canvas } 지금 사진(뒤집기만 반영된 그림)
+let viewOnionSrc = null;           // { key, canvas, idx } 겹쳐 볼 앞·뒤 사진
+// 겹쳐 보기는 "바로 앞(뒤) 순서의 **포함된** 사진"과 비교한다. 뺀 사진은 영상에 없으므로
 // 그것과 각도를 맞춰 봐야 소용이 없다.
 function prevIncluded(i) {
   for (let k = i - 1; k >= 0; k--) if (!state.items[k].excluded) return k;
   return -1;
 }
+function nextIncluded(i) {
+  for (let k = i + 1; k < state.items.length; k++) if (!state.items[k].excluded) return k;
+  return -1;
+}
+// 캐시의 T는 "포함된 사진"만큼이라, 원래 자리(i)로 찾으려면 펼쳐 둔다.
+// 캐시가 없거나 사진 구성이 달라졌으면 null — 그때는 아직 맞출 수 없는 상태다.
+function alignedT() {
+  if (!state.cache || state.cache.key !== cacheKey()) return null;
+  return spread(state.cache.T, activeItems());
+}
+// 뷰어의 세 가지 상태: 'adjust'(맞춤 모드) / 'excluded'(뺀 사진) / 'need'(구도 준비 안 됨)
+function viewMode() {
+  const it = state.items[viewIdx];
+  if (!it) return 'need';
+  if (it.excluded) return 'excluded';
+  const T = alignedT();
+  return T && T[viewIdx] ? 'adjust' : 'need';
+}
 
-// ── 확대·축소 (보기 전용) ─────────────────────────────────────
-// 휠로 1~4배까지 키워 보고, 키운 상태에서 끌어 옮긴다. 사진 데이터는 건드리지 않는다 —
-// 크기 보정은 구도 맞추기가 알아서 한다 (회전 설계 §2).
-// 그리는 규칙: 캔버스에 찍히는 자리 = 사진 좌표 × zoom + (panX, panY).
+// ── 보기 확대·축소 (보기 전용) ────────────────────────────────
+// 휠로 1~4배까지 키워 본다. 끌기는 사진을 옮기는 편집이므로 확대해도 끌어서 보기
+// 이동(팬)은 하지 않는다 — 확대는 커서 자리를 기준으로만 움직인다 (수동 맞춤 설계 §2).
 const ZOOM_MIN = 1, ZOOM_MAX = 4;
 let viewZoom = 1, panX = 0, panY = 0;
-let panning = false, panLast = null;
 function resetZoom() { viewZoom = 1; panX = 0; panY = 0; }
-// 확대한 채로 끝까지 밀어도 사진 밖의 빈 자리가 보이지 않게 이동량을 가둔다.
+// 확대한 채로 밀어도 캔버스 밖의 빈 자리가 보이지 않게 이동량을 가둔다.
 function clampPan() {
   const c = $('viewCanvas');
   panX = Math.min(0, Math.max(c.width * (1 - viewZoom), panX));
@@ -390,8 +388,8 @@ function zoomAt(cx, cy, next) {
   if (viewZoom === ZOOM_MIN) { panX = 0; panY = 0; }
   clampPan();
 }
-// 캔버스는 CSS로 판에 맞춰 줄여 그려지므로, 마우스 자리를 사진 좌표로 되돌릴 때
-// 그 비율을 곱해 줘야 커서가 가리키던 곳이 그대로 확대된다.
+// 캔버스는 CSS 크기와 픽셀 수가 다를 수 있으므로(화면 배율), 마우스 자리를 캔버스
+// 좌표로 되돌릴 때 그 비율을 곱해 줘야 커서가 가리키던 곳이 그대로 확대된다.
 function canvasScale() {
   const c = $('viewCanvas'), r = c.getBoundingClientRect();
   return { x: r.width ? c.width / r.width : 1, y: r.height ? c.height / r.height : 1, r };
@@ -401,43 +399,48 @@ function canvasPoint(e) {
   if (!r.width || !r.height) return { x: c.width / 2, y: c.height / 2 };
   return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
 }
-// 확대 상태를 화면에 반영한다(캡션의 "2.0배", 맞춤 버튼, 끌 수 있다는 커서 모양).
 function syncZoomUi() {
-  const it = state.items[viewIdx];
   $('viewFit').disabled = viewZoom === ZOOM_MIN;
-  $('viewCanvas').classList.toggle('zoom', viewZoom > ZOOM_MIN);
-  if (it) $('viewCap').textContent = captionOf(it) + (it.excluded ? ' · 제외' : '') + (viewZoom > ZOOM_MIN ? ` · ${viewZoom.toFixed(1)}배` : '');
+  $('viewZoom').textContent = viewZoom > ZOOM_MIN ? ` · ${viewZoom.toFixed(1)}배` : '';
 }
 function fitView() { resetZoom(); syncZoomUi(); drawView(); }
+
+// ── 캔버스 크기·좌표 ──────────────────────────────────────────
+// 캔버스는 판(view-stage)을 꽉 채운다. 그 안에 기준 틀(W×H) 전체가 들어가도록
+// 줄여 그리고(contain), 그 위에 보기 확대를 얹는다.
+function fitCanvas() {
+  const c = $('viewCanvas'), box = $('viewStage');
+  const dpr = Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1);
+  const w = Math.max(16, Math.round(box.clientWidth)), h = Math.max(16, Math.round(box.clientHeight));
+  const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
+  c.style.width = `${w}px`; c.style.height = `${h}px`;
+}
+// 기준 틀 좌표 → 캔버스 좌표 변환([a,b,tx,c,d,ty] 규약).
+function viewMatrix(W, H) {
+  const c = $('viewCanvas');
+  const s = Math.min(c.width / W, c.height / H);
+  const fx = (c.width - W * s) / 2, fy = (c.height - H * s) / 2;
+  const k = s * viewZoom;
+  return new Float64Array([k, 0, viewZoom * fx + panX, 0, k, viewZoom * fy + panY]);
+}
+// M = [a,b,tx,c,d,ty]를 캔버스 변환으로 건다(캔버스는 a,c,b,d,tx,ty 순서다).
+function setM(ctx, M) { ctx.setTransform(M[0], M[3], M[1], M[4], M[2], M[5]); }
 
 function openViewer(i) {
   if (locked() || !state.items[i]) return;
   if (uiState === 'done') leaveDone();      // 결과 영상 자리를 뷰어가 쓴다
   viewIdx = i;
   uiState = 'view';
-  resetZoom();                              // 사진이 바뀌면 확대는 맞춤으로 돌아간다
-  $('rotSlider').value = String(state.items[i].rotation || 0);
+  resetZoom();                              // 사진이 바뀌면 보기 확대는 맞춤으로 돌아간다
   render();
-}
-// 닫기·이동·다른 작업으로 뷰어를 떠날 때 슬라이더 값을 사진에 적용한다.
-function commitRotation() {
-  const it = state.items[viewIdx];
-  if (!it) return;
-  const deg = +$('rotSlider').value;
-  if (deg === (it.rotation || 0)) return;
-  it.rotation = deg;
-  rebuildImage(it);                  // 작은 그림(thumb)도 여기서 버려진다
-  state.status = [];                 // 회전하면 이전 구도 맞추기 결과가 맞지 않는다
-  invalidateCheck();
-  leaveDone();
 }
 function closeViewer() {
   if (uiState !== 'view') return;
-  commitRotation();
   viewIdx = -1; viewSrc = null; viewOnionSrc = null;
   uiState = state.items.length ? 'ready' : 'empty';
 }
-// 사진을 전부 비울 때처럼 적용할 대상이 사라지는 경우는 값을 버리고 나온다.
+// 사진을 전부 비울 때처럼 보던 대상이 사라지는 경우.
 function discardViewer() {
   viewIdx = -1; viewSrc = null; viewOnionSrc = null;
   if (uiState === 'view') uiState = 'ready';
@@ -445,62 +448,163 @@ function discardViewer() {
 function stepViewer(d) {
   const j = viewIdx + d;
   if (uiState !== 'view' || !state.items[j]) return;
-  commitRotation();
   viewIdx = j;
-  resetZoom();                              // 사진이 바뀌면 확대는 맞춤으로 돌아간다
-  $('rotSlider').value = String(state.items[j].rotation || 0);
+  resetZoom();
   render();
 }
 // 뷰어 화면 전체를 지금 상태에 맞춘다(setState가 부른다).
 function syncViewer() {
   const it = state.items[viewIdx];
   if (!it) return;
-  // 슬라이더 값 글씨는 여기서도 맞춘다 — 회전해 둔 사진을 열면 손잡이만 옮겨 가고
-  // 글씨는 0.0°로 남아 있었다.
-  $('rotValue').textContent = degLabel(+$('rotSlider').value);
+  const mode = viewMode();
+  $('viewCap').textContent = captionOf(it) + (it.excluded ? ' · 제외' : '');
   syncZoomUi();
   $('viewPrev').disabled = viewIdx <= 0;
   $('viewNext').disabled = viewIdx >= state.items.length - 1;
   $('viewExclude').textContent = it.excluded ? '↩ 넣기' : '✕ 빼기';
   $('viewExclude').title = it.excluded ? '영상에 다시 넣기' : '영상에서 빼기';
-  const p = prevIncluded(viewIdx);
-  // 첫 사진(앞에 포함된 사진이 없음)에서는 겹쳐 볼 것이 없다.
-  $('onion').disabled = p < 0;
-  if (p < 0) $('onion').checked = false;
-  if (!viewSrc || viewSrc.it !== it) viewSrc = { it, canvas: canvasOf(it.original) };
-  if (p < 0) viewOnionSrc = null;
+  // 구도 준비 안 됨 / 뺀 사진: 조절 줄 대신 안내를 보여 준다 (수동 맞춤 설계 §2).
+  $('viewAdjust').hidden = mode !== 'adjust';
+  $('viewNeedCheck').hidden = mode === 'adjust';
+  $('viewNeedText').textContent = mode === 'excluded'
+    ? '영상에서 뺀 사진이라 구도를 맞추지 않습니다. ↩ 넣기로 되돌리면 맞출 수 있습니다.'
+    : '먼저 각도 검사를 하면 앞뒤 사진과 맞출 수 있습니다';
+  $('viewRunCheck').hidden = mode !== 'need';
+  $('viewCanvas').classList.toggle('adjust', mode === 'adjust');
+  const adj = adjustOf(it);
+  $('adjScale').value = String(adj.scale);
+  $('adjRot').value = String(adj.rotation);
+  syncAdjustLabels();
+  $('adjReset').disabled = !isAdjusted(it);
+  // 겹쳐 보기: 첫·마지막 사진이면 해당 항목을 끈다.
+  const p = prevIncluded(viewIdx), n = nextIncluded(viewIdx);
+  const sel = $('onionMode');
+  sel.options[1].disabled = p < 0;
+  sel.options[2].disabled = n < 0;
+  if ((sel.value === 'prev' && p < 0) || (sel.value === 'next' && n < 0)) sel.value = 'none';
+  sel.disabled = mode !== 'adjust';
+  if (!viewSrc || viewSrc.it !== it) viewSrc = { it, canvas: canvasOf(it.image) };
+  const oi = mode === 'adjust' ? onionIdx() : -1;
+  if (oi < 0) viewOnionSrc = null;
   else {
-    const pit = state.items[p];
-    const key = `${p}:${pit.flips || 0}:${pit.rotation || 0}:${pit.name}`;
-    if (!viewOnionSrc || viewOnionSrc.key !== key) viewOnionSrc = { key, canvas: canvasOf(pit.image) };
+    const oit = state.items[oi];
+    const key = `${oi}:${oit.flips || 0}:${oit.name}`;
+    if (!viewOnionSrc || viewOnionSrc.key !== key) viewOnionSrc = { key, idx: oi, canvas: canvasOf(oit.image) };
   }
   drawView();
 }
+function onionIdx() {
+  const m = $('onionMode').value;
+  if (m === 'prev') return prevIncluded(viewIdx);
+  if (m === 'next') return nextIncluded(viewIdx);
+  return -1;
+}
+function syncAdjustLabels() {
+  $('adjScaleValue').textContent = `${(+$('adjScale').value).toFixed(2)}배`;
+  $('adjRotValue').textContent = degLabel(+$('adjRot').value);
+}
 // 슬라이더를 움직이는 동안 매번 불린다. 사진 데이터를 다시 만들지 않고 캔버스 변환만
-// 쓰므로 바로바로 따라온다 (회전 설계 §2).
+// 쓰므로 바로바로 따라온다.
 function drawView() {
   const it = state.items[viewIdx];
   if (!it || !viewSrc) return;
-  const c = $('viewCanvas'), w = it.original.width, h = it.original.height;
-  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  const ctx = c.getContext('2d');
+  fitCanvas();
+  const c = $('viewCanvas'), ctx = c.getContext('2d');
+  const W = it.image.width, H = it.image.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
-  // 확대·이동은 그리기 변환으로만 준다. drawOriented는 save/restore로 이 위에 얹히므로
-  // 회전 미리보기와 확대가 서로 간섭하지 않는다.
+  ctx.fillStyle = '#0b1117'; ctx.fillRect(0, 0, c.width, c.height);   // 틀 밖은 어두운 바탕
   clampPan();
-  ctx.setTransform(viewZoom, 0, 0, viewZoom, panX, panY);
-  const deg = +$('rotSlider').value;
-  const onion = $('onion').checked && viewOnionSrc;
-  // 겹쳐 보기: 앞 사진을 아래에 깔고 지금 사진을 반투명으로 얹는다. 앞 사진 쪽을
-  // 0.5로 그리면 검은 바탕과 섞여 둘 다 어두워지므로, 아래는 그대로 두고 위만 반투명
-  // 으로 그려 정확히 반반으로 섞이게 한다.
-  if (onion) ctx.drawImage(viewOnionSrc.canvas, 0, 0, w, h);
-  if (onion) ctx.globalAlpha = 0.5;
-  drawOriented(ctx, viewSrc.canvas, w, h, deg, !!it.flipped);
+  const V = viewMatrix(W, H);
+  const mode = viewMode();
+  if (mode !== 'adjust') {
+    // 구도가 아직 없으면 사진만 크게 보여 준다(뒤집기는 반영된 그림).
+    setM(ctx, V);
+    ctx.drawImage(viewSrc.canvas, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
+  const T = alignedT();
+  // 기준 틀 전체를 어두운 회색으로 깔아 사진이 틀의 어디에 앉았는지 보이게 한다.
+  setM(ctx, V);
+  ctx.fillStyle = '#232c36'; ctx.fillRect(0, 0, W, H);
+  // 겹쳐 보기: 이웃 사진을 아래에 깔고 지금 사진을 50%로 얹는다. 아래쪽을 반투명으로
+  // 그리면 바탕과 섞여 둘 다 어두워지므로, 위만 반투명으로 그려 반반으로 섞는다.
+  if (viewOnionSrc && T && T[viewOnionSrc.idx]) {
+    const oit = state.items[viewOnionSrc.idx];
+    setM(ctx, compose(V, finalT(oit, T[viewOnionSrc.idx])));
+    ctx.drawImage(viewOnionSrc.canvas, 0, 0);
+  }
+  setM(ctx, compose(V, finalT(it, T[viewIdx])));
+  ctx.globalAlpha = viewOnionSrc ? 0.5 : 1;
+  ctx.drawImage(viewSrc.canvas, 0, 0);
   ctx.globalAlpha = 1;
+  // 잘라낼 창(영상에 들어갈 범위)을 청록 점선으로 (수동 맞춤 설계 §2)
+  const { x0, y0, cw, ch } = cropRect(W, H);
+  setM(ctx, V);
+  const k = V[0] || 1;
+  ctx.strokeStyle = '#35C7B0'; ctx.lineWidth = 1.5 / k; ctx.setLineDash([9 / k, 7 / k]);
+  ctx.strokeRect(x0, y0, cw, ch);
+  ctx.setLineDash([]);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// ── 수동 맞춤 조작 ────────────────────────────────────────────
+// 값이 바뀌면 곧바로 it.adjust에 넣고 화면만 다시 그린다. 구도 맞추기 캐시는 그대로
+// 살아 있지만(보정은 자동 계산의 입력이 아니다) 겹침 점수는 달라지므로 배지를 지운다
+// (수동 맞춤 설계 §1).
+let adjBadgeTimer;
+function adjustChanged() {
+  drawView();
+  syncAdjustLabels();
+  const it = state.items[viewIdx];
+  if (it) $('adjReset').disabled = !isAdjusted(it);
+  invalidateScores();
+  leaveDone();
+  // 배지(수동 맞춤)는 격자·사진 줄을 다시 그려야 바뀐다. 슬라이더를 끄는 동안 40장을
+  // 매번 다시 그리면 뚝뚝 끊기므로 손을 멈춘 뒤에 한 번만 그린다.
+  clearTimeout(adjBadgeTimer);
+  adjBadgeTimer = setTimeout(() => { if (uiState === 'view') { renderGrid(); renderStrip(); } }, 220);
+}
+function setAdjustScale(v) {
+  const it = state.items[viewIdx];
+  if (!it || viewMode() !== 'adjust') return;
+  const s = Math.min(2, Math.max(0.5, Math.round(v * 100) / 100));
+  adjustOf(it).scale = s;
+  $('adjScale').value = String(s);
+  adjustChanged();
+}
+function setAdjustRotation(v) {
+  const it = state.items[viewIdx];
+  if (!it || viewMode() !== 'adjust') return;
+  const r = Math.min(10, Math.max(-10, Math.round(v * 4) / 4));
+  adjustOf(it).rotation = r;
+  $('adjRot').value = String(r);
+  adjustChanged();
+}
+function moveAdjust(dx, dy) {
+  const it = state.items[viewIdx];
+  if (!it || viewMode() !== 'adjust') return;
+  const a = adjustOf(it);
+  a.dx += dx; a.dy += dy;
+  adjustChanged();
+}
+function resetViewAdjust() {
+  const it = state.items[viewIdx];
+  if (!it || viewMode() !== 'adjust') return;
+  if (!isAdjusted(it)) return;
+  resetAdjust(it);
+  $('adjScale').value = '1'; $('adjRot').value = '0';
+  adjustChanged();
+  toast('이 사진의 수동 맞춤을 되돌렸습니다');
+}
+// 구도 준비 안 됨 상태에서 누르는 `각도 검사`: 뷰어를 닫고 검사한 뒤 같은 사진으로 돌아온다.
+async function runCheckFromViewer() {
+  if (uiState !== 'view') return;
+  const i = viewIdx;
+  closeViewer(); render();
+  await checkAngles();
+  if (!state.cancelled && state.items[i]) openViewer(i);
 }
 
 // state.status(정합 성공/실패 표시)는 chainTransforms가 채운 배열이라 items/flags와
@@ -511,17 +615,21 @@ function drawView() {
 // 캐시가 지금 화면의 사진 구성에서 나온 것인지 가리는 열쇠. 이름·순서·뒤집은 횟수를 잇는다
 // (같은 사진을 두 번 뒤집으면 원래대로 돌아오지만 그동안 그림이 바뀌었으므로 횟수를 센다).
 // 제외 여부도 함께 잇는다 — 한 장을 빼면 구도 맞추기 사슬 자체가 달라지기 때문이다 (제외 설계 §2).
-// 미세회전도 그림을 바꾸므로 열쇠에 넣는다 — 회전만 고치고 다시 만들면 낡은 구도
-// 맞추기 결과를 이어받아 엉뚱한 틀로 영상이 나온다 (회전 설계 §3).
-function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}:${it.rotation || 0}`).join('|'); }
+// 수동 맞춤(it.adjust)은 **넣지 않는다**: 자동 계산에 들어가는 값이 아니라 그 결과 위에
+// 덧붙는 값이라, 손질해도 구도 맞추기 결과는 그대로 유효하다 (수동 맞춤 설계 §1).
+function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}`).join('|'); }
 function setCheckNote(t) { $('checkNote').textContent = t; }
+// 겹침 점수만 낡은 경우(수동 맞춤을 고쳤을 때). 구도 맞추기 결과(캐시)는 그대로 둔다.
+function invalidateScores() {
+  const had = !!state.angle;
+  state.angle = null;
+  if (had) setCheckNote('다시 검사하세요');
+}
 // 사진을 하나라도 건드리면 구도 맞추기 결과도 겹침 점수도 더 이상 맞지 않는다.
 // 배지를 지우고, 이미 한 번 검사한 뒤였다면 다시 검사하라고 알린다 (설계 §3).
 function invalidateCheck() {
   state.cache = null;
-  const had = !!state.angle;
-  state.angle = null;
-  if (had) setCheckNote('다시 검사하세요');
+  invalidateScores();
 }
 
 function move(i, d) { moveTo(i, i + d); }
@@ -543,6 +651,9 @@ function flip(i) {
   // 뒤집기는 이제 표시만 바꾸는 깃발이다. 그림은 원본에서 다시 만든다 (회전 설계 §3).
   it.flipped = !it.flipped;
   rebuildImage(it);
+  // 뒤집힌 상태에서 맞춰 둔 값은 의미가 없으므로 수동 맞춤은 초기화한다 (수동 맞춤 설계 §1).
+  if (isAdjusted(it)) { resetAdjust(it); toast('뒤집어서 수동 맞춤을 초기화했습니다'); }
+  viewSrc = null;                    // 뷰어가 들고 있던 그림도 새 것으로 바꾼다
   state.flags[i] = { warn: null };
   // 사용자가 직접 정한 방향은 나중에 사진을 더 넣어도 자동 판정이 뒤엎지 않는다.
   it.userFlipped = true;
@@ -573,9 +684,9 @@ async function addFiles(files) {
     if (arr.length > list.length) toast(`한 번에 ${MAX}장까지만 넣을 수 있어 앞 ${list.length}장만 받았습니다.`);
     progress('사진 읽는 중');
     const { items, skipped } = await loadFiles(list, 1280);
-    // 원본은 자동 뒤집기가 돌기 **전에** 잡아 둔다. 이 뒤로 뒤집기·회전은 전부
-    // original에서 다시 만들므로, 여기서 한 번 놓치면 영영 손상된 그림만 남는다.
-    items.forEach(it => { it.original = it.image; it.flipped = false; it.rotation = 0; });
+    // 원본은 자동 뒤집기가 돌기 **전에** 잡아 둔다. 이 뒤로 뒤집기는 전부 original에서
+    // 다시 만들므로, 여기서 한 번 놓치면 영영 손상된 그림만 남는다.
+    items.forEach(it => { it.original = it.image; it.flipped = false; it.adjust = newAdjust(); });
     if (skipped.length) toast(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
     // 번호는 여기서 한 번만 정하고 다시는 바뀌지 않는다. loadFiles가 이미 날짜순으로
@@ -638,7 +749,7 @@ async function checkAngles() {
   if (state.busy || state.loading) return;
   const active = activeItems();
   if (active.length < MIN_CHECK) { toast(`영상에 넣는 사진이 ${MIN_CHECK}장 이상일 때 검사할 수 있습니다.`); return; }
-  closeViewer();                     // 크게 보기에서 조절하던 회전을 먼저 적용하고 시작한다
+  closeViewer();                     // 크게 보기(수동 맞춤)는 닫고 시작한다 — 값은 이미 사진에 들어 있다
   state.busy = true; state.cancelled = false; state.job = 'check'; phases = PHASE_CHECK;
   // 앞선 검사 결과는 먼저 지운다 — 도중에 취소하면 낡은 배지가 남아 있으면 안 된다.
   state.angle = null; setCheckNote('');
@@ -651,9 +762,9 @@ async function checkAngles() {
     const cv = await cvReady();
     const W = active[0].it.image.width, H = active[0].it.image.height;
     const key = cacheKey();
-    let T, status, aligned;
+    let T, status;
     if (state.cache && state.cache.key === key) {
-      ({ T, status, aligned } = state.cache);
+      ({ T, status } = state.cache);
       progress('구도 맞추는 중', 1, 1);
     } else {
       state.cache = null;
@@ -662,15 +773,15 @@ async function checkAngles() {
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
-      // 밝기·색 맞추기 **전**의 기준 틀 사진을 담아 둔다. 영상 만들기가 이 배열을 그대로
-      // 이어받아 구도 맞추기를 통째로 건너뛴다 (설계 §4).
-      aligned = active.map(({ it }, k) => warpImage(cv, it.image, T[k], W, H));
-      state.cache = { key, T, status, aligned };
+      state.cache = { key, T, status };
     }
     state.status = spread(status, active); render();
     if (cancelled()) throw new Error('취소');
     progress('겹침 점수 계산 중');
-    const scores = await neighborScores(cv, aligned, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
+    // 점수는 수동 맞춤까지 반영한 최종 변환으로 낸다 — 손질한 사진은 이웃과 더 잘
+    // 겹쳐야 하고, 그 결과가 배지에 그대로 보여야 한다 (수동 맞춤 설계 §1).
+    const warped = active.map(({ it }, k) => warpImage(cv, it.image, finalT(it, T[k]), W, H));
+    const scores = await neighborScores(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const med = median(scores), threshold = 0.75 * med;
     // 배지는 원래 자리에 붙어야 하므로 표시할 사진도 원본 번호(x.i)로 담는다.
     const flagged = new Set();
@@ -696,7 +807,7 @@ async function make() {
   // 제외한 사진은 영상에 들어가지 않는다. 남은 사진이 2장 미만이면 이어 붙일 구간이 없다.
   const active = activeItems();
   if (active.length < 2) { toast('영상에 넣는 사진이 2장 이상이어야 합니다.'); return; }
-  closeViewer();                     // 크게 보기에서 조절하던 회전을 먼저 적용하고 시작한다
+  closeViewer();                     // 크게 보기(수동 맞춤)는 닫고 시작한다 — 값은 이미 사진에 들어 있다
   state.busy = true; state.cancelled = false; state.job = 'make'; phases = PHASE_MAKE;
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
   jobPct = 0; $('eta').textContent = '';
@@ -711,23 +822,26 @@ async function make() {
     const W = active[0].it.image.width, H = active[0].it.image.height;
     // 각도 검사가 이미 같은 사진 구성으로 구도를 맞춰 뒀으면 그 결과를 그대로 쓴다.
     // 제일 오래 걸리는 단계라, 검사 뒤 바로 만들면 그만큼 시간이 통째로 빠진다 (설계 §4).
-    let warped, status;
-    if (state.cache && state.cache.key === cacheKey()) {
-      status = state.cache.status; warped = state.cache.aligned;
+    const key = cacheKey();
+    let T, status;
+    if (state.cache && state.cache.key === key) {
+      ({ T, status } = state.cache);
       progress('구도 맞추는 중', 1, 1);      // 막대는 이 단계 몫을 한 번에 채운다
     } else {
       state.cache = null;
       grays = [];
       for (const { it } of active) grays.push(toGray(cv, it.image));
-      const chain = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
+      ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
-      status = chain.status;
-      warped = active.map(({ it }, k) => warpImage(cv, it.image, chain.T[k], W, H));
+      if (cancelled()) throw new Error('취소');
+      state.cache = { key, T, status };
     }
+    // 기준 틀 사진은 만들 때마다 새로 만든다 — 수동 맞춤이 바뀌어도 늘 지금 값대로 나온다.
+    const warped = active.map(({ it }, k) => warpImage(cv, it.image, finalT(it, T[k]), W, H));
     state.status = spread(status, active); render();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
-    // matchColors는 새 배열·새 사진을 돌려주므로 캐시의 aligned는 그대로 살아남는다.
+    // matchColors는 새 배열·새 사진을 돌려준다(warped는 여기서 역할이 끝난다).
     const aligned = await matchColors(warped, (i, n) => progress('밝기·색 맞추는 중', i, n), cancelled);
     const { cw, ch } = alignedSize(W, H);
     const stepSec = +$('step').value, { N, fps } = planTiming(stepSec);
@@ -905,20 +1019,27 @@ $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('emptySheet').onclick = () => { if (!locked()) $('file').click(); };
 $('emptySheet').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!locked()) $('file').click(); } });
 $('bFs').onclick = toggleFs;
-// ── 크게 보기 버튼·슬라이더 ───────────────────────────────────
+// ── 크게 보기(수동 맞춤) 버튼·슬라이더 ────────────────────────
 $('viewClose').onclick = () => { closeViewer(); render(); };
 $('viewPrev').onclick = () => stepViewer(-1);
 $('viewNext').onclick = () => stepViewer(1);
 $('viewFlip').onclick = () => { if (uiState === 'view') flip(viewIdx); };
 $('viewExclude').onclick = () => { if (uiState === 'view') toggleExclude(viewIdx); };
+$('viewRunCheck').onclick = runCheckFromViewer;
 // 슬라이더는 사진 데이터를 건드리지 않고 캔버스만 다시 그린다 — 끌면 바로 따라온다.
-$('rotSlider').oninput = () => { $('rotValue').textContent = degLabel(+$('rotSlider').value); drawView(); };
-$('rotZero').onclick = () => { $('rotSlider').value = '0'; $('rotValue').textContent = degLabel(0); drawView(); };
-$('onion').onchange = () => { if (uiState === 'view') syncViewer(); };
+$('adjScale').oninput = () => setAdjustScale(+$('adjScale').value);
+$('adjScaleDown').onclick = () => setAdjustScale(+$('adjScale').value - 0.01);
+$('adjScaleUp').onclick = () => setAdjustScale(+$('adjScale').value + 0.01);
+$('adjRot').oninput = () => setAdjustRotation(+$('adjRot').value);
+$('adjReset').onclick = resetViewAdjust;
+$('onionMode').onchange = () => { if (uiState === 'view') syncViewer(); };
 $('viewFit').onclick = () => { if (uiState === 'view') fitView(); };
-// ── 확대(휠)·이동(끌기) ───────────────────────────────────────
+// 판 크기가 바뀌면 캔버스도 다시 맞춘다(창 크기 조절·전체화면).
+window.addEventListener('resize', () => { if (uiState === 'view') drawView(); });
+// ── 보기 확대(휠)·사진 옮기기(끌기) ───────────────────────────
 {
   const vc = $('viewCanvas');
+  let dragging = false, dragLast = null;
   // passive:false여야 preventDefault가 먹는다 — 아니면 좁은 화면에서 작업 영역이 같이 스크롤된다.
   vc.addEventListener('wheel', e => {
     if (uiState !== 'view') return;
@@ -928,28 +1049,39 @@ $('viewFit').onclick = () => { if (uiState === 'view') fitView(); };
     zoomAt(p.x, p.y, viewZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
     syncZoomUi(); drawView();
   }, { passive: false });
+  // 끌기는 사진을 옮기는 편집이다(보기 이동이 아니다). 맞춤 모드에서만 듣는다.
   vc.addEventListener('pointerdown', e => {
-    if (uiState !== 'view' || viewZoom === ZOOM_MIN || e.button) return;
-    panning = true; panLast = { x: e.clientX, y: e.clientY };
+    if (uiState !== 'view' || e.button) return;
+    if (vc.focus) vc.focus();        // 화살표 키로 1px씩 미는 조작을 이어서 할 수 있게
+    if (viewMode() !== 'adjust') return;
+    dragging = true; dragLast = { x: e.clientX, y: e.clientY };
     vc.classList.add('drag');
     // 포인터를 잡아 두면 캔버스 밖으로 나가도 끌기가 이어지고 손을 뗀 것도 놓치지 않는다.
     if (vc.setPointerCapture) { try { vc.setPointerCapture(e.pointerId); } catch (_) { /* 무시 */ } }
     e.preventDefault();
   });
   vc.addEventListener('pointermove', e => {
-    if (!panning) return;
+    if (!dragging) return;
+    const it = state.items[viewIdx];
+    if (!it) return;
+    // 화면에서 끈 거리를 기준 틀 좌표로 되돌린다(캔버스 배율 ÷ 지금 보기 배율).
     const { x: sx, y: sy } = canvasScale();
-    panX += (e.clientX - panLast.x) * sx; panY += (e.clientY - panLast.y) * sy;
-    panLast = { x: e.clientX, y: e.clientY };
-    clampPan(); drawView();
+    const k = viewMatrix(it.image.width, it.image.height)[0] || 1;
+    moveAdjust((e.clientX - dragLast.x) * sx / k, (e.clientY - dragLast.y) * sy / k);
+    dragLast = { x: e.clientX, y: e.clientY };
   });
-  const endPan = e => {
-    if (!panning) return;
-    panning = false; vc.classList.remove('drag');
+  const endDragMove = e => {
+    if (!dragging) return;
+    dragging = false; vc.classList.remove('drag');
     if (vc.releasePointerCapture) { try { vc.releasePointerCapture(e.pointerId); } catch (_) { /* 무시 */ } }
   };
-  vc.addEventListener('pointerup', endPan);
-  vc.addEventListener('pointercancel', endPan);
+  vc.addEventListener('pointerup', endDragMove);
+  vc.addEventListener('pointercancel', endDragMove);
+  // 사진을 더블클릭하면 닫는다 (수동 맞춤 설계 §2).
+  vc.addEventListener('dblclick', e => {
+    if (uiState !== 'view') return;
+    e.preventDefault(); closeViewer(); render();
+  });
 }
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
 $('labelMode').onchange = syncSettings;
@@ -962,12 +1094,22 @@ window.addEventListener('keydown', e => {
   if (uiState === 'view' && e.key === 'Escape') { e.preventDefault(); closeViewer(); render(); return; }
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
-  // ←/→는 입력칸에 커서가 없을 때만 앞뒤 사진으로 간다 (회전 설계 §2). 슬라이더를
-  // 잡고 있을 때는 화살표가 각도를 0.5도씩 움직이는 편이 자연스럽다.
+  // 화살표 키는 두 가지로 쓰인다. 사진을 한 번 누른(= 사진에 커서가 가 있는) 상태에서는
+  // 사진을 1px(Shift 10px)씩 밀고, 그 밖에서는 ←/→로 앞뒤 사진을 넘긴다 (수동 맞춤 설계 §2).
+  const onPhoto = uiState === 'view' && t === $('viewCanvas');
+  if (onPhoto && viewMode() === 'adjust' && e.key.startsWith('Arrow')) {
+    const d = e.shiftKey ? 10 : 1;
+    e.preventDefault();
+    if (e.key === 'ArrowLeft') moveAdjust(-d, 0);
+    else if (e.key === 'ArrowRight') moveAdjust(d, 0);
+    else if (e.key === 'ArrowUp') moveAdjust(0, -d);
+    else moveAdjust(0, d);
+    return;
+  }
   if (uiState === 'view' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault(); stepViewer(e.key === 'ArrowLeft' ? -1 : 1); return;
   }
-  // 0 = 맞춤(확대 되돌리기). 회전을 0도로 되돌리는 것은 조절 줄의 `0°` 버튼이다.
+  // 0 = 맞춤(보기 확대 되돌리기). 수동 맞춤을 되돌리는 것은 조절 줄의 `되돌리기` 버튼이다.
   if (uiState === 'view' && e.key === '0') { e.preventDefault(); fitView(); return; }
   if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFs(); }
 });
