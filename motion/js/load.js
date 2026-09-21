@@ -25,6 +25,15 @@ export function monthsLabel(d0, d) {
   return m === 0 ? `${y}년` : `${y}년 ${m}개월`;
 }
 
+// 화면·영상에 쓰는 날짜 글씨. 파일 이름에서 읽은 날짜는 그 지역 시간의 자정이라
+// toISOString()을 쓰면 시간대에 따라 하루 앞으로 밀린다. 지역 시간 그대로 적는다.
+export function dateLabel(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function baseName(name) {
   return name.replace(/\.[^.]+$/, '').split('_')[0];
 }

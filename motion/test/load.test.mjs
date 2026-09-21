@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDate, sortItems, monthsLabel, baseName, sortFiles } from '../js/load.js';
+import { parseDate, sortItems, monthsLabel, dateLabel, baseName, sortFiles } from '../js/load.js';
 
 test('parseDate finds YYYYMMDD', () => {
   assert.deepEqual(parseDate('임희진_20230724_143958.jpg'), new Date(2023, 6, 24));
@@ -18,6 +18,11 @@ test('monthsLabel', () => {
   assert.equal(monthsLabel(d0, new Date(2023, 1, 6)), '2개월');
   assert.equal(monthsLabel(d0, new Date(2023, 10, 28)), '1년');
   assert.equal(monthsLabel(d0, new Date(2024, 1, 19)), '1년 2개월');
+});
+test('dateLabel is local-time YYYY-MM-DD', () => {
+  assert.equal(dateLabel(new Date(2023, 6, 24)), '2023-07-24');
+  assert.equal(dateLabel(new Date(2022, 0, 5)), '2022-01-05');
+  assert.equal(dateLabel(parseDate('임희진_20230724_143958.jpg')), '2023-07-24');
 });
 test('baseName', () => {
   assert.equal(baseName('임희진_20230724_143958.jpg'), '임희진');
