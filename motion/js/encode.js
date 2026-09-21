@@ -1,6 +1,23 @@
 import { baseName } from './load.js';
 
-export function outputName(firstName, ext) { return `${baseName(firstName)}_교정진행.${ext}`; }
+export function outputName(firstName, ext, quality = null, date = null) {
+  const base = `${baseName(firstName)}_교정진행`;
+  const Q = { high: '고품질', fast: '빠르게', none: '단순' };
+  let result = base;
+
+  if (quality && Q[quality]) {
+    result += `_${Q[quality]}`;
+  }
+
+  if (date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    result += `_${year}-${month}-${day}`;
+  }
+
+  return `${result}.${ext}`;
+}
 export function labelMetrics(w) { return { band: Math.round(w * 0.055), font: Math.round(w * 0.035), pad: Math.round(w * 0.012) }; }
 export function drawLabel(ctx, text, w) {
   if (!text) return;
