@@ -1,41 +1,314 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>교정 진행 영상 — CaseFrame</title>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <meta name="description" content="같은 방향으로 찍은 교정 진행 사진을 넣으면 치아가 움직이는 영상(MP4)을 브라우저 안에서 만듭니다. 사진은 서버로 전송되지 않습니다.">
+<title>교정 진행 영상 — CaseFrame</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#1c1e21;--muted:#666;--line:#ddd;--accent:#1565c0;--warn:#f9a825;--bad:#c62828}
-body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--ink)}
-main{max-width:1100px;margin:0 auto;padding:16px}
-h1{font-size:22px;margin:8px 0}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
-#drop{border:2px dashed var(--accent);border-radius:10px;padding:28px;text-align:center;color:var(--muted);cursor:pointer}
-#drop.over{background:#e3f2fd}
-#drop.off{opacity:.45;pointer-events:none}
-#strip{display:flex;gap:8px;overflow-x:auto;padding:6px 0}
-.thumb{position:relative;flex:0 0 160px;border:1px solid var(--line);border-radius:6px;background:#000;cursor:grab}
-.thumb img{width:160px;height:107px;object-fit:cover;display:block;border-radius:6px 6px 0 0}
-.thumb .cap{font-size:11px;padding:4px;background:#fff;border-radius:0 0 6px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thumb .btns{position:absolute;top:2px;right:2px;display:flex;gap:2px}
-.thumb button{font-size:11px;padding:2px 5px;border:0;border-radius:4px;background:rgba(255,255,255,.9);cursor:pointer}
-.thumb.warn-flip{outline:3px solid var(--warn)}.thumb.warn-other{outline:3px solid var(--bad)}.thumb.fail{filter:grayscale(1)}
-.row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
-label.opt{display:flex;gap:6px;align-items:center;font-size:14px}
-button.primary{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:16px;cursor:pointer}
-button.primary:disabled{background:#aaa}
-#bar{height:10px;background:#eee;border-radius:5px;overflow:hidden}#bar i{display:block;height:100%;width:0;background:var(--accent)}
-#msg{color:var(--bad);font-size:14px}#note,#foot,#gpunote{color:var(--muted);font-size:13px}
-video{max-width:100%;border-radius:8px;background:#000}
-</style></head><body><main>
-<h1>교정 진행 영상</h1>
-<p id="note">같은 방향(예: 상악 교합면)으로 찍은 사진만 넣어 주세요. 사진은 이 컴퓨터 밖으로 나가지 않습니다. 크롬·엣지 권장.</p>
-<div class="card"><div id="drop">여기에 사진을 끌어다 놓거나 클릭해서 선택 (JPG/PNG, 최대 40장)<input type="file" id="file" multiple accept="image/*" hidden></div>
-<div id="strip"></div><div id="msg"></div></div>
-<div class="card row">
- <label class="opt">품질 <select id="quality"><option value="high">고품질</option><option value="fast">빠르게</option></select></label><span id="gpunote"></span>
- <label class="opt">한 단계 <input type="range" id="step" min="0.5" max="2" step="0.1" value="1.2"> <span id="stepv">1.2초</span></label>
- <label class="opt"><input type="checkbox" id="label" checked> 경과 글씨</label>
- <button class="primary" id="go" disabled>영상 만들기</button><button id="cancel" hidden>취소</button>
-</div>
-<div class="card"><div id="bar"><i></i></div><div id="stage"></div></div>
-<div class="card" id="result" hidden><video id="video" controls></video><p><a id="dl" class="primary" style="display:inline-block;text-decoration:none">MP4 저장</a> <span id="rnote"></span></p></div>
-<p id="foot">© 이음턱편한치과 · <a href="/">CaseFrame</a></p>
-</main><script src="../vendor/opencv.js" async onerror="document.getElementById('msg').textContent='OpenCV 파일을 불러오지 못했습니다. 새로고침해 주세요.'"></script><script type="module" src="js/main.js"></script></body></html>
+:root{
+  --bg:#000000; --panel:#121A22; --panel-2:#18222C; --line:#273240;
+  --muted:#93A1B0; --text:#E8EEF4; --accent:#35C7B0; --accent-2:#1E9B84;
+  --paper:#f6f7f8; --danger:#fb7185; --warn:#FFD21F;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  overflow:hidden; background:var(--bg); color:var(--text);
+  font-family:Inter,Pretendard,"Noto Sans KR",system-ui,-apple-system,sans-serif; font-size:13px;
+  display:flex; flex-direction:column;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+
+/* ── 상단 바 (CaseFrame과 같은 문법) ── */
+.topbar{
+  display:flex; align-items:center; gap:8px; padding:9px 14px;
+  background:rgba(13,19,27,.72); border-bottom:1px solid rgba(255,255,255,.07);
+  -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  user-select:none; flex:none; overflow-x:auto; z-index:5;
+}
+.brand{display:flex;align-items:center;gap:10px;cursor:pointer;flex:none;margin-right:4px}
+.brand-mark{width:30px;height:30px;flex:none}
+.brand b{display:block;font-size:14.5px;letter-spacing:-.01em}
+.brand small{display:block;color:var(--muted);font-size:10.5px;margin-top:1px}
+.sep{width:1px;height:24px;background:var(--line);margin:0 4px;flex:none}
+.spacer{flex:1}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:34px;padding:0 12px;position:relative;white-space:nowrap;flex:none;
+  border:1px solid rgba(255,255,255,.09);border-radius:12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 4px 12px rgba(0,0,0,.28);
+  transition:border-color .15s,background .15s;
+}
+.btn:hover{border-color:rgba(255,255,255,.18);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03) 50%,rgba(255,255,255,.05))}
+.btn svg{width:14px;height:14px;flex:none}
+.btn.ghost{background:transparent}
+.btn.primary{
+  border-color:rgba(53,199,176,.5); color:#06231D; font-weight:700;
+  background:linear-gradient(180deg,#4ADBC3,#1E9B84);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 4px 14px rgba(30,155,132,.35);
+}
+/* 주 버튼: 선그리기 저장 버튼보다 한 단계 크게 (설계 §4) */
+.btn.primary.big{min-height:36px;height:36px;padding:0 18px;font-size:14px;font-weight:700}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+.btn.danger{width:100%;color:#ffd5dc;border-color:#583241;background:#2b1820}
+/* 완성되면 주 버튼이 두 번 밝아지며 시선을 끈다 (설계 §4) */
+@keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.pulse{animation:pulse .4s 2}
+
+.privacy-note{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10.5px;flex:none}
+.privacy-note svg{width:12px;height:12px;flex:none;opacity:.85}
+#gpunote{color:var(--warn);font-size:10.5px;flex:none;max-width:280px;line-height:1.35}
+
+/* ── 작업 영역: 무대 + 오른쪽 조절판 ── */
+.workspace{flex:1;min-height:0;display:flex}
+#stage{position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;display:flex}
+
+/* 사진 격자: 한 장 최소 220px, 창 크기에 따라 열 수 자동 (설계 §2) */
+#grid{
+  flex:1;min-width:0;min-height:0;overflow-y:auto;padding:12px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;align-content:start;
+}
+.card{
+  position:relative;aspect-ratio:3/2;overflow:hidden;
+  border:1px solid #2c3948;border-radius:9px;background:#0e161e;cursor:grab;
+}
+.card img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none}
+.card,.card div{user-select:none;-webkit-user-select:none}
+.card .num{
+  position:absolute;left:7px;top:7px;max-width:calc(100% - 120px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:3px 8px;border-radius:7px;background:rgba(0,0,0,.72);color:#e8eef4;font-size:11px;
+}
+.card .badges{position:absolute;left:7px;top:34px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.badge{padding:2px 7px;border-radius:6px;border:1px solid;background:rgba(0,0,0,.76);font-size:10.5px;font-weight:700}
+.badge.flip{color:var(--warn);border-color:var(--warn)}
+.badge.other{color:var(--danger);border-color:var(--danger)}
+.badge.fail{color:#b9c5d1;border-color:#7d8d9d}
+.card .btns{position:absolute;right:7px;top:7px;display:flex;gap:3px}
+.card .btns button{
+  width:26px;height:26px;display:grid;place-items:center;font-size:12px;color:#e8eef4;
+  border:1px solid rgba(255,255,255,.18);border-radius:7px;background:rgba(0,0,0,.66);
+}
+.card .btns button:hover{background:rgba(0,0,0,.85);border-color:var(--accent);color:var(--accent)}
+.card.fail img{filter:grayscale(1)}
+
+/* 사진이 없을 때 가운데 안내판 */
+.sheet-empty{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(560px,82%);aspect-ratio:3/2;padding:3.2%;cursor:pointer;
+  background:var(--paper);
+  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12);
+}
+.sheet-empty .slot{
+  width:100%;height:100%;display:grid;place-items:center;text-align:center;
+  border:2px dashed #cfd5db;background:#e8ebee;color:#536170;
+}
+.sheet-empty .slot b{display:block;font-size:16.5px;color:#3c4856;margin-bottom:6px}
+.sheet-empty .slot span{font-size:11.5px;line-height:1.6}
+
+/* 완성된 영상: 판을 꽉 채운다 */
+#videoWrap{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--bg)}
+#videoWrap[hidden]{display:none}
+#video{flex:1;min-height:0;width:100%;height:100%;object-fit:contain;background:#000;border-radius:8px}
+.video-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+/* ── 오른쪽 조절판 ── */
+.inspector{
+  flex:none;width:280px;overflow-y:auto;
+  border-left:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+}
+.control-section{padding:12px 16px;border-bottom:1px solid var(--line)}
+.control-section h3{margin:0 0 9px;font-size:11.5px;color:#c7d2dc;letter-spacing:.02em}
+.control-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-size:11.5px;color:var(--muted)}
+.control-title .value{color:var(--text)}
+.field{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--muted)}
+.field:last-child{margin-bottom:0}
+.field select{
+  flex:1;min-width:0;padding:6px 8px;color:var(--text);font:inherit;
+  border:1px solid rgba(255,255,255,.14);border-radius:8px;background:#18222d;
+}
+.field input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+.field.check{cursor:pointer;color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input:disabled,select:disabled{opacity:.4;cursor:default}
+#bar{height:10px;background:#1b2530;border-radius:5px;overflow:hidden;margin-bottom:8px}
+#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4ADBC3,#1E9B84);transition:width .18s}
+#stageText{display:block;font-size:11.5px;color:var(--text);min-height:16px}
+#eta{display:block;font-size:11.5px;color:var(--muted);min-height:16px;margin-bottom:9px}
+#resultInfo{color:var(--muted);font-size:11.5px;line-height:1.75;word-break:break-all}
+#resultInfo b{color:var(--text);font-weight:600}
+.hint{color:var(--muted);font-size:10.5px;line-height:1.8}
+
+/* ── 아래 사진 줄 (CaseFrame과 같은 문법) ── */
+.filmstrip{
+  flex:none;min-width:0;display:grid;grid-template-columns:250px minmax(0,1fr) auto;
+  border-top:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+  -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+}
+.film-info{padding:11px 16px;border-right:1px solid var(--line)}
+.film-info h2{margin:0 0 4px;font-size:13px}
+.film-info p{margin:0 0 7px;color:var(--muted);font-size:10.5px;line-height:1.45}
+.asset-list{display:flex;gap:9px;padding:10px;overflow-x:auto;align-items:stretch;min-height:120px}
+.asset,.asset div{user-select:none;-webkit-user-select:none}
+.asset img{-webkit-user-drag:none}
+.asset{
+  position:relative;flex:0 0 132px;height:100px;overflow:hidden;
+  border:1px solid #2c3948;border-radius:7px;background:#18222d;cursor:grab;
+}
+.asset img{width:100%;height:100%;display:block;object-fit:cover}
+.asset .no{
+  position:absolute;left:4px;top:4px;padding:1px 6px;border-radius:5px;
+  background:rgba(0,0,0,.74);color:#dce4ec;font-size:10px;
+}
+.asset .btns{position:absolute;right:3px;top:3px;display:flex;gap:2px}
+.asset .btns button{
+  width:19px;height:19px;display:grid;place-items:center;font-size:10px;color:#e8eef4;
+  border:1px solid rgba(255,255,255,.18);border-radius:5px;background:rgba(0,0,0,.66);
+}
+.asset .btns button:hover{border-color:var(--accent);color:var(--accent)}
+.asset.warn-flip{border-color:var(--warn)}
+.asset.warn-other{border-color:var(--danger)}
+.asset.fail img{filter:grayscale(1)}
+.asset-empty{align-self:center;color:var(--muted);font-size:11px;line-height:1.6;padding:0 6px}
+.asset-empty b{color:#c7d2dc}
+.film-hint{align-self:center;padding:0 14px;border-left:1px solid var(--line);color:var(--muted);font-size:10.5px;line-height:1.75}
+
+/* 만드는 중에는 사진 조작·설정을 잠근다 (설계 §3) */
+body.locked .card .btns,body.locked .asset{opacity:.4;pointer-events:none}
+body.locked .card{cursor:default}
+
+/* ── 기타 ── */
+.sitebar{flex:none;padding:6px 14px;color:#6d7d8e;font-size:10.5px;border-top:1px solid rgba(255,255,255,.05)}
+.sitebar a{color:#8fa0b0}
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
+  background:#000c;color:#fff;padding:10px 18px;border-radius:8px;max-width:80vw;text-align:center;
+  opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;
+}
+#toast.show{opacity:1}
+#drop{position:fixed;inset:0;border:3px dashed var(--accent);background:rgba(53,199,176,.13);display:none;z-index:8;pointer-events:none}
+body.drag #drop{display:block}
+@media (max-width:900px){
+  .brand small,.privacy-note{display:none}
+  .filmstrip{grid-template-columns:1fr}
+  .film-hint{display:none}
+  .film-info{border-right:0;padding:10px 14px 0}
+  .workspace{flex-direction:column}
+  .inspector{width:auto;max-height:240px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brandHome" role="button" tabindex="0" title="CaseFrame 초기 화면으로">
+    <div class="brand-mark">
+      <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#brandGrad)"/>
+        <g fill="#06231D">
+          <path d="M32 4.5 L40 16.4 L32 22.5 L24 16.4 Z"/>
+          <path d="M32 59.5 L40 47.6 L32 41.5 L24 47.6 Z"/>
+          <path d="M4.5 32 L16.4 24 L22.5 32 L16.4 40 Z"/>
+          <path d="M59.5 32 L47.6 24 L41.5 32 L47.6 40 Z"/>
+          <rect x="25.5" y="25.5" width="13" height="13" rx="3.5"/>
+        </g>
+        <defs><linearGradient id="brandGrad" x1="2" y1="2" x2="62" y2="62"><stop stop-color="#4ADBC3"/><stop offset="1" stop-color="#1E9B84"/></linearGradient></defs>
+      </svg>
+    </div>
+    <div><b>CaseFrame</b><small>교정 진행 영상 · 로고를 누르면 처음으로</small></div>
+  </div>
+  <span class="sep"></span>
+  <div class="privacy-note" title="모든 사진은 사용하시는 컴퓨터 안에서만 처리되며, 인터넷이나 외부 서버로 전송되지 않습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 이 컴퓨터 안에서만 처리됩니다</span></div>
+  <span class="spacer"></span>
+  <span id="gpunote" hidden></span>
+  <button class="btn" id="bFs" title="전체화면 (F)">전체화면</button>
+  <span class="sep"></span>
+  <button class="btn primary big" id="primaryBtn" disabled>영상 만들기</button>
+</header>
+
+<section class="workspace">
+  <section id="stage">
+    <div id="grid"></div>
+    <div class="sheet-empty" id="emptySheet" role="button" tabindex="0" title="사진 고르기">
+      <div class="slot">
+        <div>
+          <b>같은 방향 교정 사진을 아래 칸이나 이 화면에 끌어다 놓으세요</b>
+          <span>JPG·PNG 최대 40장. 파일 이름의 날짜(20230724)로 자동 정렬됩니다.<br>
+          영상 만들기는 크롬·엣지에서만 됩니다. 사진은 이 컴퓨터 밖으로 나가지 않습니다.</span>
+        </div>
+      </div>
+    </div>
+    <div id="videoWrap" hidden>
+      <video id="video" controls playsinline></video>
+      <div class="video-actions">
+        <button class="btn primary big" id="saveBtn2">MP4 저장</button>
+        <button class="btn" id="remakeBtn">다시 만들기</button>
+        <button class="btn" id="clearBtn">사진 전부 비우기</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="inspector">
+    <div class="control-section">
+      <h3>설정</h3>
+      <label class="field"><span>품질</span>
+        <select id="quality">
+          <option value="high">고품질</option>
+          <option value="fast">빠르게</option>
+        </select>
+      </label>
+      <div class="control-title"><span>한 단계 시간</span><span class="value" id="stepv">1.2초</span></div>
+      <input id="step" type="range" min="0.5" max="2" step="0.1" value="1.2">
+      <label class="field check" style="margin-top:10px"><input type="checkbox" id="label" checked> <span>경과 글씨 넣기</span></label>
+    </div>
+    <div class="control-section">
+      <h3>진행</h3>
+      <div id="bar"><i></i></div>
+      <span id="stageText"></span>
+      <span id="eta"></span>
+      <button class="btn danger" id="cancel" disabled>취소</button>
+    </div>
+    <div class="control-section">
+      <h3>결과</h3>
+      <div id="resultInfo">아직 만든 영상이 없습니다.</div>
+    </div>
+    <div class="control-section">
+      <h3>도움말</h3>
+      <div class="hint">
+        같은 방향(예: 상악 교합면)으로 찍은 사진만 넣어 주세요.<br>
+        촬영 팁: 카메라 각도와 거리를 매번 비슷하게 맞추면 영상이 훨씬 매끄럽습니다.<br>
+        25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
+        노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.
+      </div>
+    </div>
+  </aside>
+</section>
+
+<section class="filmstrip">
+  <div class="film-info">
+    <h2>가져온 사진</h2>
+    <p>파일 이름의 날짜 순으로 정렬됩니다. 끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 뺍니다.</p>
+    <button class="btn" id="bOpen">폴더에서 선택</button>
+    <input id="file" type="file" accept="image/*" multiple hidden>
+  </div>
+  <div class="asset-list" id="assetList">
+    <div class="asset-empty" id="assetEmpty"><b>① 사진 끌어다 놓기</b> → <b>② 영상 만들기</b> → <b>③ MP4 저장</b><br>화면 아무 곳에나 떨어뜨려도 들어갑니다. 사진은 인터넷에 올라가지 않습니다.</div>
+  </div>
+  <div class="film-hint">
+    한 번에 최대 40장 · HEIC 사진은 JPG로 바꿔 넣어 주세요.<br>
+    영상을 만드는 동안에는 사진 줄과 설정이 잠깁니다 — 바꾸려면 취소하세요.
+  </div>
+</section>
+
+<footer class="sitebar">제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a> &middot; <a href="/">CaseFrame으로 돌아가기</a></footer>
+
+<div id="drop"></div>
+<div id="toast"></div>
+<script src="../vendor/opencv.js" async onerror="var t=document.getElementById('toast');t.textContent='OpenCV 파일을 불러오지 못했습니다. 새로고침해 주세요.';t.className='show'"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
