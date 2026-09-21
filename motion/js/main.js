@@ -237,6 +237,12 @@ function badgesFor(i) {
   if (a && a.flagged.has(i)) out.push(['angle', '이웃과 많이 다름', `겹침 점수 ${a.scores[i].toFixed(2)} (기준 ${a.threshold.toFixed(2)})`]);
   return out;
 }
+// 뺀 사진 위에 찍는 기울어진 "제외" 도장. 격자와 사진 줄이 같은 요소를 쓰고 크기만
+// CSS로 다르다 (수동 맞춤 설계 §3).
+function stampEl() {
+  const s = document.createElement('div'); s.className = 'stamp'; s.textContent = '제외';
+  return s;
+}
 // 순서 바꾸기·파일 받기는 큰 카드와 작은 사진이 똑같이 동작한다.
 function wireDrag(el, i, lock) {
   el.draggable = !lock;
@@ -280,6 +286,7 @@ function renderGrid() {
     // stopPropagation 하므로 여기까지 오지 않는다 (회전 설계 §2).
     d.onclick = () => openViewer(i);
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
+    if (it.excluded) d.appendChild(stampEl());
     const no = document.createElement('div'); no.className = 'num';
     no.textContent = captionOf(it);
     d.appendChild(no);
@@ -313,6 +320,7 @@ function renderStrip() {
     if (it.excluded) d.classList.add('excluded');
     d.title = `${it.no}. ${it.name}`;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
+    if (it.excluded) d.appendChild(stampEl());
     const no = document.createElement('div'); no.className = 'no'; no.textContent = captionOf(it); d.appendChild(no);
     const bl = badgesFor(i);
     if (bl.length) {
