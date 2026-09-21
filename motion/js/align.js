@@ -114,7 +114,27 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
       stop();
     }
     const inv = invert(medianFrame(T, W, H));
-    return { T: T.map(t => compose(inv, t)), status };
+    let T2 = T.map(t => compose(inv, t));
+    // ── 세로·가로 안전 이동(2026-09-22 설계) ──────────────────────────
+    // median frame으로 재기준하면, 치열궁이 자기 프레임 안에서 아래쪽으로 치우쳐
+    // 찍힌 사진은 위로 밀려 올라가 원래 윗변(자기 프레임의 y=0)이 캔버스 밖(y<0)으로
+    // 나가버린다 → 그 위의 앞니 끝이 잘린다. 사진 i의 윗변이 재기준 뒤 어디로
+    // 가는지(apply(T[i], W/2, 0)[1])를 모두 구해, 가장 많이 밖으로 나간 사진 기준으로
+    // 전체 사진을 같은 양만큼 아래로 민다(개별 사진만 밀면 사진끼리 상대 위치가
+    // 어긋난다). 위쪽으로 잘리는 대신 아래쪽(아랫니·혀)이 양보하게 하는 것이 목적이라
+    // 이동량은 H의 12%로 위로 제한한다(끝없이 밀면 이번엔 아래가 통째로 사라진다).
+    // 가로도 같은 논리로, 다만 좌우는 공평하게 6%까지만 허용한다.
+    const topYs = T2.map(t => apply(t, W / 2, 0)[1]);
+    const minTop = Math.min(...topYs);
+    const dy = minTop < 0 ? Math.min(-minTop, 0.12 * H) : 0;
+    const leftXs = T2.map(t => apply(t, 0, H / 2)[0]);
+    const minLeft = Math.min(...leftXs);
+    const dx = minLeft < 0 ? Math.min(-minLeft, 0.06 * W) : 0;
+    if (dy || dx) {
+      const shift = new Float64Array([1, 0, dx, 0, 1, dy]);
+      T2 = T2.map(t => compose(shift, t));
+    }
+    return { T: T2, status };
   } finally {
     F.forEach(f => f.delete());
   }
@@ -189,24 +209,39 @@ export async function neighborScores(cv, images, onProgress, isCancelled) {
   });
 }
 
+// 잘라내는 여백은 네 변이 다르다(2026-09-22 설계). chainTransforms의 세로 안전
+// 이동은 "위가 잘리는 대신 아래(아랫니·혀)가 양보"하게 만드므로, 크롭 여백도
+// 위는 0%로 두고 아래를 10% 잘라 그 양보분을 흡수한다. 좌우는 원래대로 5%씩
+// 공평하게. margin은 { top, bottom, left, right } 객체이고, 숫자 하나를 주면
+// (예전 방식과 호환) 네 변 모두 그 값으로 취급한다.
+const DEFAULT_MARGIN = { top: 0, bottom: 0.10, left: 0.05, right: 0.05 };
+function normMargin(margin) {
+  if (margin === undefined) return DEFAULT_MARGIN;
+  if (typeof margin === 'number') return { top: margin, bottom: margin, left: margin, right: margin };
+  return { ...DEFAULT_MARGIN, ...margin };
+}
+
 // 잘라낸 크기는 16의 배수로 내림한다. RIFE는 내부에서 화면을 여러 번 반으로 줄이므로
 // 가로·세로가 16으로 나눠떨어지지 않으면 추론이 실패하거나 가장자리가 어긋난다
 // (예전에는 짝수만 보장해서 1280×854 → 770처럼 16의 배수가 아닌 높이가 나왔다).
 // H.264 인코더에도 16의 배수가 가장 안전하다.
-export function alignedSize(W, H, margin = 0.05) {
-  const x0 = Math.floor(W * margin), y0 = Math.floor(H * margin);
+export function alignedSize(W, H, margin) {
+  const m = normMargin(margin);
+  const x0 = Math.floor(W * m.left), x1 = Math.floor(W * m.right);
+  const y0 = Math.floor(H * m.top), y1 = Math.floor(H * m.bottom);
   const unit = 16;
-  const cw = Math.max(unit, (W - 2 * x0) - ((W - 2 * x0) % unit));
-  const ch = Math.max(unit, (H - 2 * y0) - ((H - 2 * y0) % unit));
+  const cw = Math.max(unit, (W - x0 - x1) - ((W - x0 - x1) % unit));
+  const ch = Math.max(unit, (H - y0 - y1) - ((H - y0 - y1) % unit));
   return { cw, ch };
 }
 
-export function warpImage(cv, image, M, W, H, margin = 0.05) {
+export function warpImage(cv, image, M, W, H, margin) {
   const src = cv.matFromImageData(image); const dst = new cv.Mat();
   const m = mat23(cv, M);
   cv.warpAffine(src, dst, m, new cv.Size(W, H), cv.INTER_LINEAR, cv.BORDER_REPLICATE, new cv.Scalar());
-  const { cw, ch } = alignedSize(W, H, margin);
-  const x0 = Math.floor(W * margin), y0 = Math.floor(H * margin);
+  const mg = normMargin(margin);
+  const { cw, ch } = alignedSize(W, H, mg);
+  const x0 = Math.floor(W * mg.left), y0 = Math.floor(H * mg.top);
   const roi = dst.roi(new cv.Rect(x0, y0, cw, ch)); const cont = new cv.Mat(); roi.copyTo(cont);
   const data = new Uint8ClampedArray(cont.data);
   src.delete(); dst.delete(); m.delete(); roi.delete(); cont.delete();
