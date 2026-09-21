@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cvReady } from './_cv.mjs';
 import { makeTexture, warpGray, similarity } from './_synth.mjs';
-import { chainTransforms, eccRefine, medianFrame, alignedSize, warpImage } from '../js/align.js';
+import { chainTransforms, eccRefine, medianFrame, alignedSize, warpImage, neighborScores } from '../js/align.js';
 import { apply, invert, compose } from '../js/features.js';
 
 test('chainTransforms brings 4 warped copies back onto one frame', async () => {
@@ -45,6 +45,37 @@ test('warpImage returns cropped ImageData', async () => {
   const img = { width: 64, height: 48, data: new Uint8ClampedArray(64 * 48 * 4).fill(200) };
   const out = warpImage(cv, img, similarity(1, 0, 0, 0), 64, 48, 0.05);
   assert.equal(out.width, 48); assert.equal(out.height, 32); assert.equal(out.data[0], 200);
+});
+
+// 흑백 Mat을 neighborScores가 받는 RGBA 사진(ImageData 모양)으로 바꾼다.
+function grayToImage(gray) {
+  const w = gray.cols, h = gray.rows, d = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) { const v = gray.data[i]; d[4 * i] = d[4 * i + 1] = d[4 * i + 2] = v; d[4 * i + 3] = 255; }
+  return { width: w, height: h, data: d };
+}
+
+// 설계 §6-1: 구도를 맞춘 뒤의 상태를 흉내 낸다 — 같은 텍스처를 조금씩 옮긴 4장 사이에
+// 전혀 다른 텍스처 한 장을 끼워 넣으면, 그 한 장만 점수가 뚜렷하게 낮아야 한다.
+test('neighborScores singles out the one photo that does not match its neighbours', async () => {
+  const cv = await cvReady();
+  const W = 640, H = 427;
+  const base = makeTexture(cv, W, H, 21);
+  const odd = makeTexture(cv, W, H, 99);
+  const shifts = [similarity(1, 0, 0, 0), similarity(1, 0, 3, -2), similarity(1, 0, -3, 2), similarity(1, 0, 2, 3)];
+  const mats = [
+    warpGray(cv, base, shifts[0]),
+    warpGray(cv, base, shifts[1]),
+    odd,                                   // 가운데(2번)가 이웃과 전혀 다른 사진
+    warpGray(cv, base, shifts[2]),
+    warpGray(cv, base, shifts[3]),
+  ];
+  const scores = await neighborScores(cv, mats.map(grayToImage));
+  assert.equal(scores.length, 5);
+  const others = scores.filter((_, i) => i !== 2).sort((a, b) => a - b);
+  const median = others[Math.floor(others.length / 2)];
+  assert.equal(scores.indexOf(Math.min(...scores)), 2, `가장 낮은 점수가 2번이어야 한다: ${scores}`);
+  assert.ok(scores[2] < 0.75 * median, `2번 ${scores[2]} < 0.75 × 중앙값 ${median}`);
+  mats.forEach(m => m.delete()); base.delete();
 });
 
 // 정합은 25장에 몇 분씩 걸리므로 중간에 취소가 들어야 한다. 예전에는 취소 여부를

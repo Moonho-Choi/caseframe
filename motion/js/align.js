@@ -120,6 +120,75 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
   }
 }
 
+// ── 이웃 겹침 점수(각도 검사) ─────────────────────────────────
+// 구도를 맞춘(warpImage를 거친) 사진들을 받아, 각 사진이 앞뒤 이웃과 얼마나 잘 겹치는지를
+// 0~1 점수로 돌려준다. 각도가 크게 다른 사진은 구도를 맞춰도 이웃과 어긋나서 점수가 낮다.
+// 정의는 맥 파이썬 실험과 같다(2026-09-22 설계 §2):
+//   640×427로 줄이고(INTER_AREA) 7×7 블러 → 가장자리(위아래 60·좌우 80px)를 잘라내고
+//   → z-정규화(평균 0, 표준편차 1) → 이웃과 화소별 곱의 평균(= 정규화 상관).
+// 가장자리를 버리는 이유: 구도를 맞출 때 테두리가 복제되어(BORDER_REPLICATE) 사진마다
+// 다른 얼룩이 생기는데, 그 얼룩이 점수를 크게 흔든다.
+const SCORE_W = 640, SCORE_H = 427, SCORE_CROP_Y = 60, SCORE_CROP_X = 80;
+
+// 줄이기·블러·흑백 변환만 cv.Mat으로 하고, 통계와 곱셈은 순수 JS로 한다(작은 배열이라
+// Mat 연산보다 빠르고, Mat이 오래 살아 있지 않아 메모리도 안전하다).
+function scoreVector(cv, image) {
+  const src = cv.matFromImageData(image);
+  const gray = new cv.Mat(), small = new cv.Mat(), blur = new cv.Mat();
+  let roi = null, cont = null;
+  try {
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.resize(gray, small, new cv.Size(SCORE_W, SCORE_H), 0, 0, cv.INTER_AREA);
+    cv.GaussianBlur(small, blur, new cv.Size(7, 7), 0);
+    roi = blur.roi(new cv.Rect(SCORE_CROP_X, SCORE_CROP_Y, SCORE_W - 2 * SCORE_CROP_X, SCORE_H - 2 * SCORE_CROP_Y));
+    cont = new cv.Mat(); roi.copyTo(cont);
+    const d = cont.data, n = d.length, v = new Float32Array(n);
+    let s = 0;
+    for (let i = 0; i < n; i++) s += d[i];
+    const m = s / n;
+    let ss = 0;
+    for (let i = 0; i < n; i++) { const u = d[i] - m; v[i] = u; ss += u * u; }
+    // 완전히 단색인 사진(표준편차 0)에서 0으로 나누지 않도록 막는다.
+    const sd = Math.sqrt(ss / n) || 1;
+    for (let i = 0; i < n; i++) v[i] /= sd;
+    return v;
+  } finally {
+    src.delete(); gray.delete(); small.delete(); blur.delete();
+    if (roi) roi.delete(); if (cont) cont.delete();
+  }
+}
+
+// 사진 한 장을 줄이고 흐리는 데만 수십 ms가 걸려, 40장이면 화면이 통째로 멈춘 것처럼
+// 보인다. chainTransforms와 같은 방식으로 한 장마다 진행을 알리고 한 틱 양보한다.
+// onProgress는 총 n번 불린다. isCancelled()가 true면 Error('취소')를 던진다.
+export async function neighborScores(cv, images, onProgress, isCancelled) {
+  const n = images.length;
+  const stop = () => { if (isCancelled && isCancelled()) throw new Error('취소'); };
+  const V = [];
+  for (let i = 0; i < n; i++) {
+    V.push(scoreVector(cv, images[i]));
+    onProgress && onProgress(i + 1, n);
+    await yieldToUI();
+    stop();
+  }
+  // pair[i] = 사진 i와 i+1의 겹침 점수
+  const pair = [];
+  for (let i = 0; i + 1 < n; i++) {
+    const a = V[i], b = V[i + 1];
+    let s = 0;
+    for (let k = 0; k < a.length; k++) s += a[k] * b[k];
+    pair.push(s / a.length);
+  }
+  // 사진 한 장의 점수 = 있는 쪽 이웃(앞·뒤) 점수의 평균. 양 끝은 한쪽만,
+  // 사진이 2장이면 둘 다 같은 점수가 된다(설계 §2).
+  return V.map((_, i) => {
+    let s = 0, c = 0;
+    if (i > 0) { s += pair[i - 1]; c++; }
+    if (i + 1 < n) { s += pair[i]; c++; }
+    return c ? s / c : 1;
+  });
+}
+
 // 잘라낸 크기는 16의 배수로 내림한다. RIFE는 내부에서 화면을 여러 번 반으로 줄이므로
 // 가로·세로가 16으로 나눠떨어지지 않으면 추론이 실패하거나 가장자리가 어긋난다
 // (예전에는 짝수만 보장해서 1280×854 → 770처럼 16의 배수가 아닌 높이가 나왔다).
