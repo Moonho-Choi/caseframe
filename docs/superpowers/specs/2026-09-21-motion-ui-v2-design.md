@@ -1,7 +1,7 @@
 # 교정 진행 영상 도구 화면 개편(v2) 설계
 
 작성일: 2026-09-21
-상태: 원장 승인 (설계 단계)
+상태: 구현 완료, 공개 대기 (2026-09-21)
 바탕: [2026-09-20-motion-tool-design.md](2026-09-20-motion-tool-design.md) — 부품(load/orient/align/color/interp/encode)은 그대로 두고 **화면(motion/index.html, main.js)만** 다시 짠다.
 
 ## 1. 왜
