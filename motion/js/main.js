@@ -53,8 +53,9 @@ function setState(s) {
     mk.disabled = state.items.length < 2 || locked();
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
+  // 만드는 중에는 화면에 걸린 영상이 곧 갈아치워질 이전 판이라 저장을 막는다.
   const saves = [$('saveBtn'), $('saveBtn2')];
-  const hasResult = !!(lastUrl && lastName);
+  const hasResult = !!(lastUrl && lastName) && !state.busy;
   for (const b of saves) { b.classList.remove('pulse'); b.disabled = !hasResult; }
   if (s === 'done' && hasResult) {
     for (const b of saves) {

@@ -150,8 +150,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 input[type=range]{width:100%;accent-color:var(--accent)}
 #labelNote{display:block;margin-top:6px;color:var(--warn);font-size:10.5px;line-height:1.45}
 #labelNote[hidden]{display:none}
-/* 만들기 버튼만 들어가는 칸은 위아래 여백만 준다 */
-.control-section.make-row{padding:12px 16px}
 input:disabled,select:disabled{opacity:.4;cursor:default}
 #bar{height:10px;background:#1b2530;border-radius:5px;overflow:hidden;margin-bottom:8px}
 #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4ADBC3,#1E9B84);transition:width .18s}
@@ -303,7 +301,7 @@ body.drag #drop{display:block}
       </label>
       <span id="labelNote" hidden></span>
     </div>
-    <div class="control-section make-row">
+    <div class="control-section">
       <button class="btn make" id="makeBtn" disabled>영상 만들기</button>
     </div>
     <div class="control-section">
