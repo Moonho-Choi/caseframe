@@ -58,14 +58,21 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
   box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 4px 14px rgba(232,100,30,.32);
 }
 .btn.make:hover{background:linear-gradient(180deg,#FF9A55,#F0722C);border-color:rgba(255,138,61,.75)}
-/* 각도 검사 버튼: 만들기 버튼 위, 조절판 폭을 꽉 채우는 보통 색 버튼 (각도 검사 설계 §3) */
-.btn.check{width:100%;min-height:40px;height:40px;margin-bottom:8px}
+/* 각도 검사 버튼: 만들기 버튼 위, 조절판 폭을 꽉 채우는 파란 버튼.
+   주황 만들기 버튼(52px)보다 한 단계 작게 두어 위계를 지킨다 (제외 설계 §4) */
+.btn.check{
+  width:100%;min-height:44px;height:44px;margin-bottom:8px;font-size:15px;font-weight:700;
+  color:#fff;border-color:rgba(77,163,255,.55);
+  background:linear-gradient(180deg,#4DA3FF,#1E6FD9);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.3),0 4px 14px rgba(30,111,217,.32);
+}
+.btn.check:hover{background:linear-gradient(180deg,#63B0FF,#2C7CE4);border-color:rgba(77,163,255,.75)}
 /* 저장 버튼: 청록, 높이 44px. .block이면 조절판 폭을 꽉 채운다 (v3 설계 §2) */
 .btn.save{min-height:44px;height:44px;padding:0 18px;font-size:14px;font-weight:700}
 .btn.save.block{width:100%}
 .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
-/* 비활성 만들기 버튼은 주황을 빼고 회색으로 (설계 §2) */
-.btn.make:disabled{
+/* 비활성 만들기·각도 검사 버튼은 색을 빼고 회색으로 (설계 §2, 제외 설계 §4) */
+.btn.make:disabled,.btn.check:disabled{
   color:#93A1B0;border-color:rgba(255,255,255,.09);
   background:linear-gradient(180deg,#3A444F,#2A333D);box-shadow:none;
 }
@@ -104,6 +111,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .badge.fail{color:#b9c5d1;border-color:#7d8d9d}
 /* 이웃과 많이 다른 사진: 주황 바탕에 진한 글씨 (각도 검사 설계 §3) */
 .badge.angle{color:#1A0E05;border-color:#FF8A3D;background:#FF8A3D}
+/* 영상에서 뺀 사진: 회색 배지 (제외 설계 §2) */
+.badge.excluded{color:#b9c5d1;border-color:#7d8d9d}
+/* 뺀 사진은 그 자리에 그대로 두되 흐리게 — ↩로 언제든 되돌릴 수 있다 (제외 설계 §2) */
+.card.excluded,.asset.excluded{opacity:.45;filter:grayscale(.6)}
 .card .btns{position:absolute;right:7px;top:7px;display:flex;gap:3px}
 .card .btns button{
   width:26px;height:26px;display:grid;place-items:center;font-size:12px;color:#e8eef4;
@@ -199,6 +210,7 @@ input:disabled,select:disabled{opacity:.4;cursor:default}
 .asset .tags .other{color:var(--danger)}
 .asset .tags .fail{color:#b9c5d1}
 .asset .tags .angle{color:#FF8A3D}
+.asset .tags .excluded{color:#b9c5d1}
 .asset .btns{position:absolute;right:3px;top:3px;display:flex;gap:2px}
 .asset .btns button{
   width:19px;height:19px;display:grid;place-items:center;font-size:10px;color:#e8eef4;
@@ -309,7 +321,7 @@ body.drag #drop{display:block}
       <span id="labelNote" hidden></span>
     </div>
     <div class="control-section">
-      <button class="btn check" id="checkBtn" disabled title="이웃과 잘 겹치지 않는 사진을 찾아 표시합니다 (사진 3장 이상)">각도 검사</button>
+      <button class="btn check" id="checkBtn" disabled title="이웃과 잘 겹치지 않는 사진을 찾아 표시합니다 (영상에 넣는 사진 3장 이상)">각도 검사</button>
       <button class="btn make" id="makeBtn" disabled>영상 만들기</button>
     </div>
     <div class="control-section">
@@ -331,7 +343,8 @@ body.drag #drop{display:block}
         같은 방향(예: 상악 교합면)으로 찍은 사진만 넣어 주세요.<br>
         촬영 팁: 카메라 각도와 거리를 매번 비슷하게 맞추면 영상이 훨씬 매끄럽습니다.<br>
         25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
-        노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.
+        노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
+        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.
       </div>
     </div>
   </aside>
@@ -340,7 +353,7 @@ body.drag #drop{display:block}
 <section class="filmstrip">
   <div class="film-info">
     <h2>가져온 사진</h2>
-    <p>파일 이름의 날짜 순으로 정렬됩니다. 끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 뺍니다.</p>
+    <p>파일 이름의 날짜 순으로 정렬됩니다. 끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 영상에서 뺍니다(↩로 다시 넣기). 번호는 처음 넣을 때 정해져 바뀌지 않습니다.</p>
     <button class="btn" id="bOpen">폴더에서 선택</button>
     <input id="file" type="file" accept="image/*" multiple hidden>
   </div>

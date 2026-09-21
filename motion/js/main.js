@@ -44,6 +44,21 @@ function toast(msg) {
 // 바꾸면 T[i]가 엉뚱한 사진에 붙거나 아예 undefined가 되어 도중에 터진다.
 function locked() { return state.busy || state.loading; }
 
+// ── 제외한 사진 ───────────────────────────────────────────────
+// 빼기(✕)를 눌러도 목록에서 없애지 않고 excluded 표시만 붙인다. 그래야 그 자리에 그대로
+// 남아 넣기(↩)로 되돌릴 수 있다 (제외 설계 §2).
+// 영상 만들기·각도 검사·방향 검사는 이 "포함된 사진"만 받는다. 원래 자리(i)를 함께 들고
+// 다녀야 결과 배지(구도 실패·이웃과 많이 다름)가 엉뚱한 사진에 붙지 않는다.
+function activeItems() { return state.items.map((it, i) => ({ it, i })).filter(x => !x.it.excluded); }
+function activeCount() { return state.items.reduce((n, it) => n + (it.excluded ? 0 : 1), 0); }
+// 포함된 사진만큼 나온 결과(구도 성공/실패, 겹침 점수)를 원본 길이 배열로 되돌린다.
+// 제외한 자리는 null이라 어떤 배지도 붙지 않는다.
+function spread(arr, active) {
+  const out = new Array(state.items.length).fill(null);
+  active.forEach((x, k) => { out[x.i] = arr[k]; });
+  return out;
+}
+
 // ── 상태 기계 ─────────────────────────────────────────────────
 // empty: 사진 없음 / ready: 만들 수 있음 / busy: 만드는 중 / done: 영상 완성
 function setState(s) {
@@ -57,10 +72,12 @@ function setState(s) {
     ck.textContent = state.job === 'check' ? `검사 중 ${jobPct}%` : '각도 검사';
     mk.disabled = ck.disabled = true;
   } else {
+    // 제외한 사진은 영상에 들어가지 않으므로 버튼을 켤지 말지도 "포함된 장수"로 센다 (제외 설계 §2).
+    const on = activeCount();
     mk.textContent = '영상 만들기';
-    mk.disabled = state.items.length < 2 || locked();
+    mk.disabled = on < 2 || locked();
     ck.textContent = '각도 검사';
-    ck.disabled = state.items.length < MIN_CHECK || locked();
+    ck.disabled = on < MIN_CHECK || locked();
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
   // 만드는 중에는 화면에 걸린 영상이 곧 갈아치워질 이전 판이라 저장을 막는다.
@@ -94,7 +111,7 @@ function syncSettings() {
   $('labelMode').disabled = lock;
   // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
   // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
-  const noDate = state.items.reduce((n, it) => n + (it.date ? 0 : 1), 0);
+  const noDate = state.items.reduce((n, it) => n + (it.date || it.excluded ? 0 : 1), 0);
   const note = $('labelNote');
   note.textContent = noDate ? `날짜 없는 사진 ${noDate}장은 글씨 없이 갑니다` : '';
   note.hidden = !noDate || $('labelMode').value === 'none';
@@ -162,10 +179,13 @@ function thumbOf(it) {
 }
 // 격자 카드와 사진 줄이 같은 형식을 쓴다: `번호 · 2023-02-20` (v3 설계 §4).
 // 날짜가 없는 사진은 파일 이름 앞토막으로 대신한다.
-function captionOf(it, i) { return `${i + 1} · ${it.date ? dateLabel(it.date) : baseName(it.name)}`; }
+// 번호는 넣을 때 한 번 정해진 it.no다. 순서를 바꿔도 따라 바뀌지 않아야 원장이 무엇을
+// 옮겼는지 알 수 있다 (고정 번호 설계 §3) — 자리(i)로 세지 않는다.
+function captionOf(it) { return `${it.no} · ${it.date ? dateLabel(it.date) : baseName(it.name)}`; }
 // [CSS 이름, 글씨, 마우스를 올렸을 때 설명(없으면 빈 값)]. 여러 개가 함께 붙을 수 있다.
 function badgesFor(i) {
   const out = [], f = state.flags[i];
+  if (state.items[i].excluded) out.push(['excluded', '제외', '영상에 넣지 않습니다. ↩로 다시 넣을 수 있습니다']);
   if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음', '']);
   else if (f && f.warn === 'other') out.push(['other', '다른 방향?', '']);
   if (state.status[i] === 'fail') out.push(['fail', '구도 실패', '']);
@@ -198,16 +218,23 @@ function btnRow(i, lock, defs) {
   }
   return b;
 }
+// 같은 버튼 하나가 빼기와 넣기를 번갈아 맡는다. 개별 삭제는 없다 (제외 설계 §2).
+function excludeBtn(i, it) {
+  return it.excluded
+    ? ['↩', '영상에 다시 넣기', () => toggleExclude(i)]
+    : ['✕', '영상에서 빼기', () => toggleExclude(i)];
+}
 function renderGrid() {
   const g = $('grid'); g.innerHTML = '';
   const lock = locked();
   state.items.forEach((it, i) => {
     const d = document.createElement('div'); d.className = 'card';
     if (state.status[i] === 'fail') d.classList.add('fail');
+    if (it.excluded) d.classList.add('excluded');
     d.title = it.name;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
     const no = document.createElement('div'); no.className = 'num';
-    no.textContent = captionOf(it, i);
+    no.textContent = captionOf(it);
     d.appendChild(no);
     const bl = badgesFor(i);
     if (bl.length) {
@@ -219,7 +246,7 @@ function renderGrid() {
       ['◀', '앞으로 옮기기', () => move(i, -1)],
       ['▶', '뒤로 옮기기', () => move(i, 1)],
       ['⇄', '좌우 뒤집기', () => flip(i)],
-      ['✕', '빼기', () => remove(i)],
+      excludeBtn(i, it),
     ]));
     wireDrag(d, i, lock);
     g.appendChild(d);
@@ -236,9 +263,10 @@ function renderStrip() {
     if (f && f.warn === 'flip') d.classList.add('warn-flip');
     if (f && f.warn === 'other') d.classList.add('warn-other');
     if (state.status[i] === 'fail') d.classList.add('fail');
-    d.title = `${i + 1}. ${it.name}`;
+    if (it.excluded) d.classList.add('excluded');
+    d.title = `${it.no}. ${it.name}`;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
-    const no = document.createElement('div'); no.className = 'no'; no.textContent = captionOf(it, i); d.appendChild(no);
+    const no = document.createElement('div'); no.className = 'no'; no.textContent = captionOf(it); d.appendChild(no);
     const bl = badgesFor(i);
     if (bl.length) {
       const tags = document.createElement('div'); tags.className = 'tags';
@@ -251,7 +279,7 @@ function renderStrip() {
     }
     d.appendChild(btnRow(i, lock, [
       ['⇄', '좌우 뒤집기', () => flip(i)],
-      ['✕', '빼기', () => remove(i)],
+      excludeBtn(i, it),
     ]));
     wireDrag(d, i, lock);
     list.appendChild(d);
@@ -266,7 +294,8 @@ function render() { renderGrid(); renderStrip(); syncState(); }
 // ── 각도 검사 캐시 ────────────────────────────────────────────
 // 캐시가 지금 화면의 사진 구성에서 나온 것인지 가리는 열쇠. 이름·순서·뒤집은 횟수를 잇는다
 // (같은 사진을 두 번 뒤집으면 원래대로 돌아오지만 그동안 그림이 바뀌었으므로 횟수를 센다).
-function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}`).join('|'); }
+// 제외 여부도 함께 잇는다 — 한 장을 빼면 구도 맞추기 사슬 자체가 달라지기 때문이다 (제외 설계 §2).
+function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}`).join('|'); }
 function setCheckNote(t) { $('checkNote').textContent = t; }
 // 사진을 하나라도 건드리면 구도 맞추기 결과도 겹침 점수도 더 이상 맞지 않는다.
 // 배지를 지우고, 이미 한 번 검사한 뒤였다면 다시 검사하라고 알린다 (설계 §3).
@@ -298,11 +327,12 @@ function flip(i) {
   invalidateCheck();
   leaveDone(); render();
 }
-function remove(i) {
+// 빼기(✕)·넣기(↩). 목록에서 없애지 않으므로 items/flags/status의 길이·자리는 그대로다.
+// 구도 맞추기 사슬이 달라지므로 이전 결과(구도 실패·각도 배지·캐시)는 모두 무효로 한다.
+function toggleExclude(i) {
   if (locked()) return;
-  if (state.status.length === state.items.length) state.status.splice(i, 1);
-  else state.status = [];
-  state.items.splice(i, 1); state.flags.splice(i, 1);
+  state.items[i].excluded = !state.items[i].excluded;
+  state.status = [];
   invalidateCheck();
   leaveDone(); render();
 }
@@ -321,19 +351,26 @@ async function addFiles(files) {
     const { items, skipped } = await loadFiles(list, 1280);
     if (skipped.length) toast(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
+    // 번호는 여기서 한 번만 정하고 다시는 바뀌지 않는다. loadFiles가 이미 날짜순으로
+    // 돌려주므로 순서대로 최댓값+1부터 매기면 된다 (고정 번호 설계 §3).
+    const maxNo = state.items.reduce((m, it) => Math.max(m, it.no || 0), 0);
+    items.forEach((it, k) => { it.no = maxNo + 1 + k; });
     state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
     state.status = [];
     invalidateCheck();
+    const active = activeItems();
+    if (!active.length) return;
     const cv = await cvReady();
     progress('방향 검사 중');
     // toGray가 도중에 터져도 그때까지 만든 Mat이 finally에서 풀리도록 하나씩 담는다
     // (map으로 한 번에 만들면 예외가 나는 순간 grays는 아직 null이라 전부 샌다).
     grays = [];
-    for (const it of state.items) grays.push(toGray(cv, it.image));
-    const W = state.items[0].image.width;
+    for (const { it } of active) grays.push(toGray(cv, it.image));
+    const W = active[0].it.image.width;
     const res = await checkOrientation(cv, grays, W, (i, n) => progress('방향 검사 중', i, n));
     grays.forEach(g => g.delete()); grays = null;
-    applyOrientation(res, state.items.length - items.length);
+    // 새로 들어온 사진은 제외 표시가 없으므로 포함 목록의 뒤쪽 items.length장이 그대로 새 사진이다.
+    applyOrientation(res, active, active.length - items.length);
   } catch (e) {
     toast('오류: ' + (e.message || e));
   } finally {
@@ -350,14 +387,16 @@ async function addFiles(files) {
 // 사용자가 본 그대로 둔다. 다만 이번 투표에서 기준 방향이 지난번과 반대로 잡혔다면
 // (= 기존 사진 과반이 "뒤집어라"로 나오면) 새 사진에는 부호를 되돌려 적용해야
 // 기존 사진들과 같은 방향이 된다.
-function applyOrientation(res, prevCount) {
+// res는 "포함된 사진"만큼 나오므로, 결과를 되돌릴 때는 원래 자리(x.i)에 적는다.
+function applyOrientation(res, active, prevCount) {
   let flipVotes = 0;
-  for (let i = 0; i < prevCount; i++) if (res[i].flip) flipVotes++;
+  for (let k = 0; k < prevCount; k++) if (res[k].flip) flipVotes++;
   const opposite = prevCount > 0 && flipVotes * 2 > prevCount;
-  res.forEach((r, i) => {
-    if (i < prevCount || state.items[i].userFlipped) return;
+  res.forEach((r, k) => {
+    const { it, i } = active[k];
+    if (k < prevCount || it.userFlipped) return;
     const doFlip = opposite ? !r.flip : r.flip;
-    if (doFlip) { state.items[i].image = flipImageData(state.items[i].image); state.items[i].thumb = null; }
+    if (doFlip) { it.image = flipImageData(it.image); it.thumb = null; }
     state.flags[i] = { warn: doFlip ? 'flip' : (r.warn === 'other' ? 'other' : null) };
   });
 }
@@ -370,7 +409,8 @@ const median = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.
 // 만들기(make)와 같은 잠금·취소·진행·자원 정리 틀을 쓴다.
 async function checkAngles() {
   if (state.busy || state.loading) return;
-  if (state.items.length < MIN_CHECK) { toast(`사진이 ${MIN_CHECK}장 이상일 때 검사할 수 있습니다.`); return; }
+  const active = activeItems();
+  if (active.length < MIN_CHECK) { toast(`영상에 넣는 사진이 ${MIN_CHECK}장 이상일 때 검사할 수 있습니다.`); return; }
   state.busy = true; state.cancelled = false; state.job = 'check'; phases = PHASE_CHECK;
   // 앞선 검사 결과는 먼저 지운다 — 도중에 취소하면 낡은 배지가 남아 있으면 안 된다.
   state.angle = null; setCheckNote('');
@@ -381,7 +421,7 @@ async function checkAngles() {
   let grays = null;
   try {
     const cv = await cvReady();
-    const W = state.items[0].image.width, H = state.items[0].image.height;
+    const W = active[0].it.image.width, H = active[0].it.image.height;
     const key = cacheKey();
     let T, status, aligned;
     if (state.cache && state.cache.key === key) {
@@ -390,27 +430,28 @@ async function checkAngles() {
     } else {
       state.cache = null;
       grays = [];
-      for (const it of state.items) grays.push(toGray(cv, it.image));
+      for (const { it } of active) grays.push(toGray(cv, it.image));
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
       // 밝기·색 맞추기 **전**의 기준 틀 사진을 담아 둔다. 영상 만들기가 이 배열을 그대로
       // 이어받아 구도 맞추기를 통째로 건너뛴다 (설계 §4).
-      aligned = state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H));
+      aligned = active.map(({ it }, k) => warpImage(cv, it.image, T[k], W, H));
       state.cache = { key, T, status, aligned };
     }
-    state.status = status; render();
+    state.status = spread(status, active); render();
     if (cancelled()) throw new Error('취소');
     progress('겹침 점수 계산 중');
     const scores = await neighborScores(cv, aligned, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const med = median(scores), threshold = 0.75 * med;
+    // 배지는 원래 자리에 붙어야 하므로 표시할 사진도 원본 번호(x.i)로 담는다.
     const flagged = new Set();
-    scores.forEach((s, i) => { if (s < threshold) flagged.add(i); });
-    state.angle = { scores, threshold, median: med, flagged };
+    scores.forEach((s, k) => { if (s < threshold) flagged.add(active[k].i); });
+    state.angle = { scores: spread(scores, active), threshold, median: med, flagged };
     progress('완료');
     setCheckNote(`각도 검사: ${flagged.size}장 표시 (중앙값 ${med.toFixed(2)})`);
     toast(flagged.size
-      ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ✕로 빼면 영상이 매끄러워집니다.`
+      ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ✕(빼기)로 빼면 영상이 매끄러워집니다.`
       : '모든 사진이 고르게 겹칩니다.');
   } catch (e) {
     toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e));
@@ -424,6 +465,9 @@ async function checkAngles() {
 
 async function make() {
   if (state.busy || state.loading) return;
+  // 제외한 사진은 영상에 들어가지 않는다. 남은 사진이 2장 미만이면 이어 붙일 구간이 없다.
+  const active = activeItems();
+  if (active.length < 2) { toast('영상에 넣는 사진이 2장 이상이어야 합니다.'); return; }
   state.busy = true; state.cancelled = false; state.job = 'make'; phases = PHASE_MAKE;
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
   jobPct = 0; $('eta').textContent = '';
@@ -435,7 +479,7 @@ async function make() {
   let grays = null, enc = null, rife = null;
   try {
     const cv = await cvReady();
-    const W = state.items[0].image.width, H = state.items[0].image.height;
+    const W = active[0].it.image.width, H = active[0].it.image.height;
     // 각도 검사가 이미 같은 사진 구성으로 구도를 맞춰 뒀으면 그 결과를 그대로 쓴다.
     // 제일 오래 걸리는 단계라, 검사 뒤 바로 만들면 그만큼 시간이 통째로 빠진다 (설계 §4).
     let warped, status;
@@ -445,13 +489,13 @@ async function make() {
     } else {
       state.cache = null;
       grays = [];
-      for (const it of state.items) grays.push(toGray(cv, it.image));
+      for (const { it } of active) grays.push(toGray(cv, it.image));
       const chain = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
       grays.forEach(g => g.delete()); grays = null;
       status = chain.status;
-      warped = state.items.map((it, i) => warpImage(cv, it.image, chain.T[i], W, H));
+      warped = active.map(({ it }, k) => warpImage(cv, it.image, chain.T[k], W, H));
     }
-    state.status = status; render();
+    state.status = spread(status, active); render();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
     // matchColors는 새 배열·새 사진을 돌려주므로 캐시의 aligned는 그대로 살아남는다.
@@ -471,8 +515,8 @@ async function make() {
     // 글씨는 처음 고른 대로 한 벌만 만든다(미리보기 = 저장 파일). 날짜가 없는 사진은
     // 어느 쪽을 골랐든 그 구간만 글씨 없이 간다 (v3 설계 §1).
     const labelMode = $('labelMode').value;
-    const firstDated = state.items.find(it => it.date);
-    const labels = state.items.map(it => {
+    const firstDated = active.map(x => x.it).find(it => it.date);
+    const labels = active.map(({ it }) => {
       if (labelMode === 'none' || !it.date || !firstDated) return '';
       return labelMode === 'date' ? dateLabel(it.date) : monthsLabel(firstDated.date, it.date);
     });
@@ -511,7 +555,7 @@ async function make() {
     $('video').src = url;
     // 인공지능이 돌지 않아 단순 겹치기로 만들었으면 파일 이름도 "단순"으로 남긴다.
     const usedQuality = (!rife || rife.failed) ? 'none' : quality;
-    lastName = outputName(state.items[0].name, 'mp4', usedQuality, new Date());
+    lastName = outputName(active[0].it.name, 'mp4', usedQuality, new Date());
     showResult(total / fps, cw, ch, blob.size, lastName, usedQuality === 'none');
     $('eta').textContent = '';
     uiState = 'done'; progress('완료', total, total);
