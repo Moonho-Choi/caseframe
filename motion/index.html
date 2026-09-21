@@ -152,13 +152,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 #viewer[hidden]{display:none}
 .view-cap{flex:none;text-align:center;color:#c7d2dc;font-size:12.5px;min-height:17px}
 .view-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000;border-radius:8px}
-#viewCanvas{max-width:100%;max-height:100%;display:block}
+#viewCanvas{max-width:100%;max-height:100%;display:block;touch-action:none}
+/* 확대한 동안에만 "끌 수 있다"는 손 모양으로 바꾼다 (회전 설계 §2) */
+#viewCanvas.zoom{cursor:grab}
+#viewCanvas.zoom.drag{cursor:grabbing}
 .view-rot{flex:none;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}
 .view-rot input[type=range]{width:min(420px,42vw)}
 #rotValue{min-width:54px;text-align:right;color:var(--text);font-size:13px;font-weight:700}
 .view-rot label.check{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text)}
 .view-rot input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 .view-rot input:disabled+span{opacity:.4}
+.view-hint{color:var(--muted);font-size:10.5px}
 .view-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
 /* ── 오른쪽 조절판 ── */
@@ -316,6 +320,8 @@ body.drag #drop{display:block}
         <span id="rotValue">0.0°</span>
         <button class="btn" id="rotZero" title="회전을 0도로 되돌립니다">0°</button>
         <label class="check"><input type="checkbox" id="onion"><span>앞 사진 겹쳐 보기</span></label>
+        <button class="btn" id="viewFit" title="확대를 원래 크기로 되돌립니다 (0)" disabled>맞춤</button>
+        <span class="view-hint">휠을 굴리면 확대(최대 4배) · 확대한 뒤 끌면 이동</span>
       </div>
       <div class="view-actions">
         <button class="btn" id="viewPrev" title="앞 사진 (←)">◀ 이전</button>
@@ -380,7 +386,8 @@ body.drag #drop{display:block}
         25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
         노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
         ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.<br>
-        사진을 클릭하면 크게 보입니다. 거기서 슬라이더로 미세회전하고, 앞 사진을 겹쳐 볼 수 있습니다(Esc 닫기, ←/→ 이동).
+        사진을 클릭하면 크게 보입니다. 거기서 슬라이더로 미세회전하고, 앞 사진을 겹쳐 볼 수 있습니다(Esc 닫기, ←/→ 이동).<br>
+        크게 보기에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(끌어서 이동, 0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.
       </div>
     </div>
   </aside>

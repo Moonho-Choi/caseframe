@@ -366,11 +366,56 @@ function prevIncluded(i) {
   return -1;
 }
 
+// ── 확대·축소 (보기 전용) ─────────────────────────────────────
+// 휠로 1~4배까지 키워 보고, 키운 상태에서 끌어 옮긴다. 사진 데이터는 건드리지 않는다 —
+// 크기 보정은 구도 맞추기가 알아서 한다 (회전 설계 §2).
+// 그리는 규칙: 캔버스에 찍히는 자리 = 사진 좌표 × zoom + (panX, panY).
+const ZOOM_MIN = 1, ZOOM_MAX = 4;
+let viewZoom = 1, panX = 0, panY = 0;
+let panning = false, panLast = null;
+function resetZoom() { viewZoom = 1; panX = 0; panY = 0; }
+// 확대한 채로 끝까지 밀어도 사진 밖의 빈 자리가 보이지 않게 이동량을 가둔다.
+function clampPan() {
+  const c = $('viewCanvas');
+  panX = Math.min(0, Math.max(c.width * (1 - viewZoom), panX));
+  panY = Math.min(0, Math.max(c.height * (1 - viewZoom), panY));
+}
+// 커서 아래에 있던 지점이 그 자리에 머물도록 배율과 이동량을 함께 고친다.
+function zoomAt(cx, cy, next) {
+  const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+  if (z === viewZoom) return;
+  panX = cx - (cx - panX) * (z / viewZoom);
+  panY = cy - (cy - panY) * (z / viewZoom);
+  viewZoom = z;
+  if (viewZoom === ZOOM_MIN) { panX = 0; panY = 0; }
+  clampPan();
+}
+// 캔버스는 CSS로 판에 맞춰 줄여 그려지므로, 마우스 자리를 사진 좌표로 되돌릴 때
+// 그 비율을 곱해 줘야 커서가 가리키던 곳이 그대로 확대된다.
+function canvasScale() {
+  const c = $('viewCanvas'), r = c.getBoundingClientRect();
+  return { x: r.width ? c.width / r.width : 1, y: r.height ? c.height / r.height : 1, r };
+}
+function canvasPoint(e) {
+  const c = $('viewCanvas'), { x: sx, y: sy, r } = canvasScale();
+  if (!r.width || !r.height) return { x: c.width / 2, y: c.height / 2 };
+  return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
+}
+// 확대 상태를 화면에 반영한다(캡션의 "2.0배", 맞춤 버튼, 끌 수 있다는 커서 모양).
+function syncZoomUi() {
+  const it = state.items[viewIdx];
+  $('viewFit').disabled = viewZoom === ZOOM_MIN;
+  $('viewCanvas').classList.toggle('zoom', viewZoom > ZOOM_MIN);
+  if (it) $('viewCap').textContent = captionOf(it) + (it.excluded ? ' · 제외' : '') + (viewZoom > ZOOM_MIN ? ` · ${viewZoom.toFixed(1)}배` : '');
+}
+function fitView() { resetZoom(); syncZoomUi(); drawView(); }
+
 function openViewer(i) {
   if (locked() || !state.items[i]) return;
   if (uiState === 'done') leaveDone();      // 결과 영상 자리를 뷰어가 쓴다
   viewIdx = i;
   uiState = 'view';
+  resetZoom();                              // 사진이 바뀌면 확대는 맞춤으로 돌아간다
   $('rotSlider').value = String(state.items[i].rotation || 0);
   render();
 }
@@ -402,6 +447,7 @@ function stepViewer(d) {
   if (uiState !== 'view' || !state.items[j]) return;
   commitRotation();
   viewIdx = j;
+  resetZoom();                              // 사진이 바뀌면 확대는 맞춤으로 돌아간다
   $('rotSlider').value = String(state.items[j].rotation || 0);
   render();
 }
@@ -409,10 +455,10 @@ function stepViewer(d) {
 function syncViewer() {
   const it = state.items[viewIdx];
   if (!it) return;
-  $('viewCap').textContent = captionOf(it) + (it.excluded ? ' · 제외' : '');
   // 슬라이더 값 글씨는 여기서도 맞춘다 — 회전해 둔 사진을 열면 손잡이만 옮겨 가고
   // 글씨는 0.0°로 남아 있었다.
   $('rotValue').textContent = degLabel(+$('rotSlider').value);
+  syncZoomUi();
   $('viewPrev').disabled = viewIdx <= 0;
   $('viewNext').disabled = viewIdx >= state.items.length - 1;
   $('viewExclude').textContent = it.excluded ? '↩ 넣기' : '✕ 빼기';
@@ -438,8 +484,13 @@ function drawView() {
   const c = $('viewCanvas'), w = it.original.width, h = it.original.height;
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   const ctx = c.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+  // 확대·이동은 그리기 변환으로만 준다. drawOriented는 save/restore로 이 위에 얹히므로
+  // 회전 미리보기와 확대가 서로 간섭하지 않는다.
+  clampPan();
+  ctx.setTransform(viewZoom, 0, 0, viewZoom, panX, panY);
   const deg = +$('rotSlider').value;
   const onion = $('onion').checked && viewOnionSrc;
   // 겹쳐 보기: 앞 사진을 아래에 깔고 지금 사진을 반투명으로 얹는다. 앞 사진 쪽을
@@ -449,6 +500,7 @@ function drawView() {
   if (onion) ctx.globalAlpha = 0.5;
   drawOriented(ctx, viewSrc.canvas, w, h, deg, !!it.flipped);
   ctx.globalAlpha = 1;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 // state.status(정합 성공/실패 표시)는 chainTransforms가 채운 배열이라 items/flags와
@@ -863,6 +915,42 @@ $('viewExclude').onclick = () => { if (uiState === 'view') toggleExclude(viewIdx
 $('rotSlider').oninput = () => { $('rotValue').textContent = degLabel(+$('rotSlider').value); drawView(); };
 $('rotZero').onclick = () => { $('rotSlider').value = '0'; $('rotValue').textContent = degLabel(0); drawView(); };
 $('onion').onchange = () => { if (uiState === 'view') syncViewer(); };
+$('viewFit').onclick = () => { if (uiState === 'view') fitView(); };
+// ── 확대(휠)·이동(끌기) ───────────────────────────────────────
+{
+  const vc = $('viewCanvas');
+  // passive:false여야 preventDefault가 먹는다 — 아니면 좁은 화면에서 작업 영역이 같이 스크롤된다.
+  vc.addEventListener('wheel', e => {
+    if (uiState !== 'view') return;
+    e.preventDefault();
+    // deltaY 단위가 브라우저·장치마다 달라(픽셀/줄/페이지) 부호만 쓰고 한 칸씩 키운다.
+    const p = canvasPoint(e);
+    zoomAt(p.x, p.y, viewZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    syncZoomUi(); drawView();
+  }, { passive: false });
+  vc.addEventListener('pointerdown', e => {
+    if (uiState !== 'view' || viewZoom === ZOOM_MIN || e.button) return;
+    panning = true; panLast = { x: e.clientX, y: e.clientY };
+    vc.classList.add('drag');
+    // 포인터를 잡아 두면 캔버스 밖으로 나가도 끌기가 이어지고 손을 뗀 것도 놓치지 않는다.
+    if (vc.setPointerCapture) { try { vc.setPointerCapture(e.pointerId); } catch (_) { /* 무시 */ } }
+    e.preventDefault();
+  });
+  vc.addEventListener('pointermove', e => {
+    if (!panning) return;
+    const { x: sx, y: sy } = canvasScale();
+    panX += (e.clientX - panLast.x) * sx; panY += (e.clientY - panLast.y) * sy;
+    panLast = { x: e.clientX, y: e.clientY };
+    clampPan(); drawView();
+  });
+  const endPan = e => {
+    if (!panning) return;
+    panning = false; vc.classList.remove('drag');
+    if (vc.releasePointerCapture) { try { vc.releasePointerCapture(e.pointerId); } catch (_) { /* 무시 */ } }
+  };
+  vc.addEventListener('pointerup', endPan);
+  vc.addEventListener('pointercancel', endPan);
+}
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
 $('labelMode').onchange = syncSettings;
 const brandHome = $('brandHome');
@@ -879,6 +967,8 @@ window.addEventListener('keydown', e => {
   if (uiState === 'view' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault(); stepViewer(e.key === 'ArrowLeft' ? -1 : 1); return;
   }
+  // 0 = 맞춤(확대 되돌리기). 회전을 0도로 되돌리는 것은 조절 줄의 `0°` 버튼이다.
+  if (uiState === 'view' && e.key === '0') { e.preventDefault(); fitView(); return; }
   if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFs(); }
 });
 
