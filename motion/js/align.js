@@ -122,11 +122,13 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
     // 가는지(apply(T[i], W/2, 0)[1])를 모두 구해, 가장 많이 밖으로 나간 사진 기준으로
     // 전체 사진을 같은 양만큼 아래로 민다(개별 사진만 밀면 사진끼리 상대 위치가
     // 어긋난다). 위쪽으로 잘리는 대신 아래쪽(아랫니·혀)이 양보하게 하는 것이 목적이라
-    // 이동량은 H의 12%로 위로 제한한다(끝없이 밀면 이번엔 아래가 통째로 사라진다).
+    // 이동량은 H의 4%로 위로 제한한다. 25장 실사진 측정: 기존 12%/10% 설정이 평균
+    // ~160px을 하단에서 자르므로, 4%/4%로 변경하면 상단을 ~4px 이내로 유지하면서도
+    // 하단 손실을 예전 수준으로 돌릴 수 있다.
     // 가로도 같은 논리로, 다만 좌우는 공평하게 6%까지만 허용한다.
     const topYs = T2.map(t => apply(t, W / 2, 0)[1]);
     const minTop = Math.min(...topYs);
-    const dy = minTop < 0 ? Math.min(-minTop, 0.12 * H) : 0;
+    const dy = minTop < 0 ? Math.min(-minTop, 0.04 * H) : 0;
     const leftXs = T2.map(t => apply(t, 0, H / 2)[0]);
     const minLeft = Math.min(...leftXs);
     const dx = minLeft < 0 ? Math.min(-minLeft, 0.06 * W) : 0;
@@ -211,10 +213,10 @@ export async function neighborScores(cv, images, onProgress, isCancelled) {
 
 // 잘라내는 여백은 네 변이 다르다(2026-09-22 설계). chainTransforms의 세로 안전
 // 이동은 "위가 잘리는 대신 아래(아랫니·혀)가 양보"하게 만드므로, 크롭 여백도
-// 위는 0%로 두고 아래를 10% 잘라 그 양보분을 흡수한다. 좌우는 원래대로 5%씩
+// 위는 0%로 두고 아래를 4% 잘라 그 양보분을 흡수한다. 좌우는 원래대로 5%씩
 // 공평하게. margin은 { top, bottom, left, right } 객체이고, 숫자 하나를 주면
 // (예전 방식과 호환) 네 변 모두 그 값으로 취급한다.
-const DEFAULT_MARGIN = { top: 0, bottom: 0.10, left: 0.05, right: 0.05 };
+const DEFAULT_MARGIN = { top: 0, bottom: 0.04, left: 0.05, right: 0.05 };
 function normMargin(margin) {
   if (margin === undefined) return DEFAULT_MARGIN;
   if (typeof margin === 'number') return { top: margin, bottom: margin, left: margin, right: margin };
