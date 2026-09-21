@@ -6,6 +6,7 @@ test('planTiming', () => {
   assert.deepEqual(planTiming(1.2), { N: 64, fps: 53 });
   assert.deepEqual(planTiming(0.5), { N: 16, fps: 32 });
   assert.deepEqual(planTiming(2.0), { N: 64, fps: 32 });
+  assert.deepEqual(planTiming(3.0), { N: 128, fps: 43 });
 });
 
 test('image<->chw roundtrip', () => {

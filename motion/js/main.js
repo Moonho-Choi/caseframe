@@ -354,8 +354,8 @@ function nextIncluded(i) {
 // 캐시의 T는 "포함된 사진"만큼이라, 원래 자리(i)로 찾으려면 펼쳐 둔다.
 // 캐시가 없거나 사진 구성이 달라졌으면 null — 그때는 아직 맞출 수 없는 상태다.
 function alignedT() {
-  if (!state.cache || state.cache.key !== cacheKey()) return null;
-  return spread(state.cache.T, activeItems());
+  if (!state.cache || state.cache.key !== cacheKey() || state.cache.T.length !== state.items.length) return null;
+  return state.cache.T;
 }
 // 뷰어의 세 가지 상태: 'adjust'(맞춤 모드) / 'excluded'(뺀 사진) / 'need'(구도 준비 안 됨)
 function viewMode() {
@@ -478,12 +478,15 @@ function syncViewer() {
   $('adjRot').value = String(adj.rotation);
   syncAdjustLabels();
   $('adjReset').disabled = !isAdjusted(it);
-  // 겹쳐 보기: 첫·마지막 사진이면 해당 항목을 끈다.
+  // 겹쳐 보기: 첫·마지막 사진이면 해당 항목을 끄고, 고른 쪽이 없으면 반대쪽을 대신 보여 준다.
   const p = prevIncluded(viewIdx), n = nextIncluded(viewIdx);
   const sel = $('onionMode');
   sel.options[1].disabled = p < 0;
   sel.options[2].disabled = n < 0;
-  if ((sel.value === 'prev' && p < 0) || (sel.value === 'next' && n < 0)) sel.value = 'none';
+  let eff = onionPref;
+  if (eff === 'prev' && p < 0) eff = n >= 0 ? 'next' : 'none';
+  if (eff === 'next' && n < 0) eff = p >= 0 ? 'prev' : 'none';
+  sel.value = eff;
   sel.disabled = mode !== 'adjust';
   if (!viewSrc || viewSrc.it !== it) viewSrc = { it, canvas: canvasOf(it.image) };
   const oi = mode === 'adjust' ? onionIdx() : -1;
@@ -495,6 +498,10 @@ function syncViewer() {
   }
   drawView();
 }
+// 겹쳐 보기에서 사용자가 고른 값. 첫 사진(앞 사진 없음)·마지막 사진(뒤 사진 없음)에서는
+// 반대쪽을 대신 보여 주되 이 값은 건드리지 않아, 다음 사진으로 가면 고른 대로 돌아온다
+// (원장 소감: 첫 사진으로 가면 "없음"으로 굳어 버려 편집이 불편).
+let onionPref = 'prev';
 function onionIdx() {
   const m = $('onionMode').value;
   if (m === 'prev') return prevIncluded(viewIdx);
@@ -619,7 +626,10 @@ async function runCheckFromViewer() {
 // 제외 여부도 함께 잇는다 — 한 장을 빼면 구도 맞추기 사슬 자체가 달라지기 때문이다 (제외 설계 §2).
 // 수동 맞춤(it.adjust)은 **넣지 않는다**: 자동 계산에 들어가는 값이 아니라 그 결과 위에
 // 덧붙는 값이라, 손질해도 구도 맞추기 결과는 그대로 유효하다 (수동 맞춤 설계 §1).
-function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}`).join('|'); }
+// 제외 여부도 **넣지 않는다**(2026-09-21 개정): 구도는 뺀 사진까지 전부 넣고 한 번 맞춰 두고,
+// 빼기/넣기는 그 결과에서 고르기만 한다. 그래야 뺐다 넣어도 검사를 다시 하지 않고 바로
+// 수동 맞춤·만들기가 되고, 사진을 빼도 전체 구도(잘림)가 흔들리지 않는다.
+function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}`).join('|'); }
 function setCheckNote(t) { $('checkNote').textContent = t; }
 // 겹침 점수만 낡은 경우(수동 맞춤을 고쳤을 때). 구도 맞추기 결과(캐시)는 그대로 둔다.
 function invalidateScores() {
@@ -669,8 +679,8 @@ function flip(i) {
 function toggleExclude(i) {
   if (locked()) return;
   state.items[i].excluded = !state.items[i].excluded;
-  state.status = [];
-  invalidateCheck();
+  // 구도 결과(캐시)·구도 실패 표시·각도 배지는 그대로 둔다. 뺀 사진까지 한 번에 맞춰 두었으므로
+  // 다시 넣어도 바로 쓸 수 있고, "이웃과 많이 다름" 표시는 빼는 동안 계속 보여야 한다.
   leaveDone(); render();
 }
 
@@ -771,18 +781,19 @@ async function checkAngles() {
     } else {
       state.cache = null;
       grays = [];
-      for (const { it } of active) grays.push(toGray(cv, it.image));
+      // 뺀 사진도 함께 맞춘다 — 나중에 다시 넣어도 검사 없이 바로 쓰기 위해서다.
+      for (const it of state.items) grays.push(toGray(cv, it.image));
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
       state.cache = { key, T, status };
     }
-    state.status = spread(status, active); render();
+    state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
     progress('겹침 점수 계산 중');
     // 점수는 수동 맞춤까지 반영한 최종 변환으로 낸다 — 손질한 사진은 이웃과 더 잘
     // 겹쳐야 하고, 그 결과가 배지에 그대로 보여야 한다 (수동 맞춤 설계 §1).
-    const warped = active.map(({ it }, k) => warpImage(cv, it.image, finalT(it, T[k]), W, H));
+    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
     const scores = await neighborScores(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const med = median(scores), threshold = 0.75 * med;
     // 배지는 원래 자리에 붙어야 하므로 표시할 사진도 원본 번호(x.i)로 담는다.
@@ -832,15 +843,15 @@ async function make() {
     } else {
       state.cache = null;
       grays = [];
-      for (const { it } of active) grays.push(toGray(cv, it.image));
+      for (const it of state.items) grays.push(toGray(cv, it.image));
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
       state.cache = { key, T, status };
     }
     // 기준 틀 사진은 만들 때마다 새로 만든다 — 수동 맞춤이 바뀌어도 늘 지금 값대로 나온다.
-    const warped = active.map(({ it }, k) => warpImage(cv, it.image, finalT(it, T[k]), W, H));
-    state.status = spread(status, active); render();
+    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
+    state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
     // matchColors는 새 배열·새 사진을 돌려준다(warped는 여기서 역할이 끝난다).
@@ -1034,7 +1045,7 @@ $('adjScaleDown').onclick = () => setAdjustScale(+$('adjScale').value - 0.01);
 $('adjScaleUp').onclick = () => setAdjustScale(+$('adjScale').value + 0.01);
 $('adjRot').oninput = () => setAdjustRotation(+$('adjRot').value);
 $('adjReset').onclick = resetViewAdjust;
-$('onionMode').onchange = () => { if (uiState === 'view') syncViewer(); };
+$('onionMode').onchange = () => { onionPref = $('onionMode').value; if (uiState === 'view') syncViewer(); };
 $('viewFit').onclick = () => { if (uiState === 'view') fitView(); };
 // 판 크기가 바뀌면 캔버스도 다시 맞춘다(창 크기 조절·전체화면).
 window.addEventListener('resize', () => { if (uiState === 'view') drawView(); });

@@ -1,5 +1,7 @@
+// 한 단계에 만들 그림 수 N(2의 거듭제곱)과 초당 장수. 2초까지는 64장(1.2초=53fps, 2초=32fps)이라
+// 만드는 시간이 같고, 2초를 넘기면 128장으로 올려 부드러움을 지킨다(3초=43fps, 시간 두 배).
 export function planTiming(stepSec) {
-  const N = Math.min(64, 2 ** Math.ceil(Math.log2(30 * stepSec)));
+  const N = Math.min(128, 2 ** Math.ceil(Math.log2(30 * stepSec)));
   // fps는 정수여야 한다 — mp4-muxer/VideoEncoder가 정수가 아닌 frameRate를 거부한다
   // ("Invalid video frame rate ... Must be a positive integer.").
   return { N, fps: Math.min(60, Math.round(N / stepSec)) };
