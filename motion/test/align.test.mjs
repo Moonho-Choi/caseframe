@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cvReady } from './_cv.mjs';
 import { makeTexture, warpGray, similarity } from './_synth.mjs';
-import { chainTransforms, eccRefine, medianFrame, alignedSize, warpImage, neighborScores } from '../js/align.js';
+import { chainTransforms, eccRefine, medianFrame, alignedSize, cropRect, adjustMatrix, warpImage, neighborScores } from '../js/align.js';
 import { apply, invert, compose } from '../js/features.js';
 
 test('chainTransforms brings 4 warped copies back onto one frame', async () => {
@@ -83,6 +83,59 @@ test('alignedSize is a multiple of 16 and about 90% of frame', () => {
 
 test('alignedSize still accepts a plain number margin (all four sides)', () => {
   assert.deepEqual(alignedSize(1280, 854, 0.05), { cw: 1152, ch: 768 });
+});
+
+// 수동 맞춤 설계 §1: 보정 행렬은 기준 틀 한가운데를 축으로 배율·회전을 주고
+// 그 뒤에 (dx, dy)만큼 옮긴다. 아래 다섯 시험이 그 규칙을 못 박는다.
+const W5 = 640, H5 = 480;
+const near = (p, x, y, msg) => assert.ok(Math.hypot(p[0] - x, p[1] - y) < 1e-6, `${msg}: ${p} ≠ ${[x, y]}`);
+// -0과 0처럼 부호만 다른 값도 같은 행렬이므로 값끼리 견준다.
+const sameM = (M, want, msg) => want.forEach((v, j) => assert.ok(Math.abs(M[j] - v) < 1e-9, `${msg}[${j}]: ${M[j]} ≠ ${v}`));
+
+test('adjustMatrix: 손질이 없으면 단위행렬', () => {
+  sameM(adjustMatrix({ scale: 1, rotation: 0, dx: 0, dy: 0 }, W5, H5), [1, 0, 0, 0, 1, 0], '기본값');
+  // 값을 주지 않아도(undefined) 손질 없음으로 본다
+  sameM(adjustMatrix(undefined, W5, H5), [1, 0, 0, 0, 1, 0], '없음');
+});
+
+test('adjustMatrix: 배율은 가운데를 고정한 채 키운다', () => {
+  const M = adjustMatrix({ scale: 2, rotation: 0, dx: 0, dy: 0 }, W5, H5);
+  near(apply(M, 320, 240), 320, 240, '가운데는 그대로');
+  // 가운데에서 (100, 50) 떨어진 점은 두 배 멀어진다
+  near(apply(M, 420, 290), 520, 340, '가운데에서 두 배');
+});
+
+test('adjustMatrix: 회전은 가운데를 축으로 돈다', () => {
+  const M = adjustMatrix({ scale: 1, rotation: 90, dx: 0, dy: 0 }, W5, H5);
+  near(apply(M, 320, 240), 320, 240, '가운데는 그대로');
+  // 오른쪽으로 100 떨어진 점은 화면 좌표(y가 아래로 증가)에서 아래로 100 내려간다
+  near(apply(M, 420, 240), 320, 340, '오른쪽 → 아래');
+  near(apply(M, 320, 140), 420, 240, '위 → 오른쪽');
+});
+
+test('adjustMatrix: 이동은 모든 점을 같은 양만큼 옮긴다', () => {
+  const M = adjustMatrix({ scale: 1, rotation: 0, dx: 12, dy: -7 }, W5, H5);
+  sameM(M, [1, 0, 12, 0, 1, -7], '이동만');
+  near(apply(M, 0, 0), 12, -7, '왼쪽 위');
+  near(apply(M, 320, 240), 332, 233, '가운데');
+});
+
+test('adjustMatrix: 순서는 배율·회전 뒤에 이동', () => {
+  const adj = { scale: 2, rotation: 90, dx: 30, dy: 40 };
+  const M = adjustMatrix(adj, W5, H5);
+  // 이동이 나중이므로, 이동 없는 행렬의 결과에 (dx, dy)를 더한 것과 정확히 같아야 한다.
+  // (이동이 먼저였다면 배율 2배·회전 90도가 이동량까지 함께 돌려 (-80, 60)이 된다.)
+  const noMove = adjustMatrix({ scale: 2, rotation: 90, dx: 0, dy: 0 }, W5, H5);
+  for (const [x, y] of [[0, 0], [640, 0], [320, 240], [100, 300]]) {
+    const a = apply(M, x, y), b = apply(noMove, x, y);
+    near(a, b[0] + 30, b[1] + 40, `(${x},${y})`);
+  }
+  near(apply(M, 320, 240), 350, 280, '가운데는 이동량만큼만');
+});
+
+test('cropRect marks the window warpImage actually cuts out', () => {
+  assert.deepEqual(cropRect(1280, 854), { x0: 64, y0: 0, cw: 1152, ch: 816 });
+  assert.deepEqual(cropRect(1280, 854, 0.05), { x0: 64, y0: 42, cw: 1152, ch: 768 });
 });
 
 test('warpImage returns cropped ImageData', async () => {

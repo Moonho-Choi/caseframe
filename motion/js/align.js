@@ -237,6 +237,35 @@ export function alignedSize(W, H, margin) {
   return { cw, ch };
 }
 
+// 잘라낼 창을 기준 틀(W×H) 좌표로 돌려준다 — warpImage가 실제로 오려 내는 바로 그
+// 사각형이다. 수동 맞춤 화면이 이 사각형을 점선으로 그려, 영상에 들어갈 범위를
+// 눈으로 확인하게 한다 (수동 맞춤 설계 §2).
+export function cropRect(W, H, margin) {
+  const m = normMargin(margin);
+  const { cw, ch } = alignedSize(W, H, m);
+  return { x0: Math.floor(W * m.left), y0: Math.floor(H * m.top), cw, ch };
+}
+
+// ── 수동 맞춤 보정 행렬 ───────────────────────────────────────
+// 자동 구도 맞추기(T) 위에 덧붙는 손 보정이다. 기준 틀 한가운데(W/2, H/2)를 축으로
+// 배율·회전을 주고, 그 뒤에 (dx, dy)만큼 옮긴다 (수동 맞춤 설계 §1).
+//   M = translate(dx,dy) ∘ translate(cx,cy) ∘ rotate(rotation) ∘ scale(scale) ∘ translate(−cx,−cy)
+// 가운데를 축으로 삼는 이유: 크기·회전을 건드려도 사진이 화면 밖으로 달아나지 않아야
+// 원장이 슬라이더를 끝까지 밀어 봐도 길을 잃지 않는다.
+export const DEFAULT_ADJUST = { scale: 1, rotation: 0, dx: 0, dy: 0 };
+export function adjustMatrix(adj, W, H) {
+  const a = adj || DEFAULT_ADJUST;
+  const s = a.scale === undefined ? 1 : a.scale;
+  const r = (a.rotation || 0) * Math.PI / 180;
+  const dx = a.dx || 0, dy = a.dy || 0;
+  const cx = W / 2, cy = H / 2;
+  const co = Math.cos(r) * s, si = Math.sin(r) * s;
+  return new Float64Array([
+    co, -si, cx + dx - (co * cx - si * cy),
+    si, co, cy + dy - (si * cx + co * cy),
+  ]);
+}
+
 export function warpImage(cv, image, M, W, H, margin) {
   const src = cv.matFromImageData(image); const dst = new cv.Mat();
   const m = mat23(cv, M);
