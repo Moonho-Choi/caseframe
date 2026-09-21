@@ -1,7 +1,7 @@
 # 교정 진행 영상 도구 — 크게 보기·미세회전·겹쳐 보기 설계
 
 작성일: 2026-09-22
-상태: 원장 승인 (설계 단계)
+상태: 구현 완료, 공개 대기 (2026-09-22)
 바탕: [2026-09-22-motion-exclude-toggle-design.md](2026-09-22-motion-exclude-toggle-design.md). 바꾸는 파일: `motion/js/main.js`, `motion/index.html`, `motion/js/load.js`(회전 함수 추가) 또는 새 `motion/js/rotate.js`, 시험 파일, `motion/README.md`.
 
 ## 1. 왜
