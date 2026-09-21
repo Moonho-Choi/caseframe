@@ -22,7 +22,7 @@ let lastUrl = null;
 let lastName = '';                 // 저장 버튼이 쓸 파일 이름
 let gpuLocked = false;             // WebGPU가 없어 품질을 "빠르게"로 고정한 경우
 let uiState = 'empty';             // empty | ready | busy | done
-let progressPct = 0;
+let jobPct = 0;                    // 만들기 한 판 전체의 진행률(0~100)
 
 // ── 알림(토스트) ───────────────────────────────────────────────
 let toastTimer;
@@ -48,7 +48,7 @@ function setState(s) {
     void p.offsetWidth;                       // 같은 상태로 다시 들어와도 애니메이션이 돌도록
     p.classList.add('pulse');
   } else if (s === 'busy') {
-    p.textContent = `만드는 중 ${progressPct}%`; p.disabled = true;
+    p.textContent = `만드는 중 ${jobPct}%`; p.disabled = true;
   } else {
     p.textContent = '영상 만들기';
     p.disabled = state.items.length < 2 || locked();
@@ -77,11 +77,30 @@ function syncSettings() {
 }
 
 // ── 진행 표시 ─────────────────────────────────────────────────
+// 단계마다 i/n을 따로 세면 "만드는 중 54%"까지 올라갔다가 다음 단계에서 0%로 떨어진다.
+// 만들기 한 판을 100으로 놓고 단계마다 몫을 정해, 그 안에서만 움직이게 한다.
+// [시작 지점, 이 단계의 몫] — 합이 100이다.
+const PHASE = {
+  '구도 맞추는 중': [0, 15],
+  '밝기·색 맞추는 중': [15, 5],
+  '인공지능 모델 준비 중': [20, 0],
+  '중간 그림 그리는 중': [20, 75],
+  '영상 파일 만드는 중': [95, 5],
+  '완료': [100, 0],
+};
 function progress(stage, i, n) {
   $('stageText').textContent = n ? `${stage} ${i}/${n}` : (stage || '');
-  progressPct = n ? Math.round(100 * i / n) : 0;
-  $('bar').firstElementChild.style.width = n ? `${progressPct}%` : '0%';
-  if (uiState === 'busy') $('primaryBtn').textContent = `만드는 중 ${progressPct}%`;
+  const slice = PHASE[stage];
+  if (slice) {
+    // 단계 순서가 정해져 있어도 되돌아가는 일이 없도록 지금까지의 최대값만 남긴다.
+    jobPct = Math.max(jobPct, Math.min(100, Math.round(slice[0] + (n ? slice[1] * i / n : 0))));
+    $('bar').firstElementChild.style.width = `${jobPct}%`;
+  } else {
+    // 사진 읽기·방향 검사는 만들기 전 단계라 그 단계만의 진행을 보여 준다.
+    jobPct = 0;
+    $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%';
+  }
+  if (uiState === 'busy') $('primaryBtn').textContent = `만드는 중 ${jobPct}%`;
 }
 // 남은 시간 = (경과 시간 / 처리한 프레임) × 남은 프레임, 10초마다 갱신 (설계 §3)
 let runStart = 0, etaAt = 0;
@@ -279,7 +298,7 @@ async function make() {
   if (state.busy || state.loading) return;
   state.busy = true; state.cancelled = false;
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
-  $('eta').textContent = '';
+  jobPct = 0; $('eta').textContent = '';
   // 잠금 표시는 여기서 바로 그려야 한다. 예전에는 chainTransforms가 끝난 뒤에야
   // renderStrip()이 불려서, 제일 오래 걸리는 "구도 맞추는 중" 내내 ◀▶⇄✕ 버튼이
   // 그대로 눌렸다 — H1이 막으려던 바로 그 구간이 열려 있었다.
@@ -346,7 +365,7 @@ async function make() {
     // 인공지능이 돌지 않아 단순 겹치기로 만들었으면 파일 이름도 "단순"으로 남긴다.
     const usedQuality = (!rife || rife.failed) ? 'none' : quality;
     lastName = outputName(state.items[0].name, 'mp4', usedQuality, new Date());
-    showResult(total / fps, cw, ch, lastName, usedQuality === 'none');
+    showResult(total / fps, cw, ch, blob.size, lastName, usedQuality === 'none');
     $('eta').textContent = '';
     uiState = 'done'; progress('완료', total, total);
   } catch (e) { toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e)); progress(''); $('eta').textContent = ''; }
@@ -361,11 +380,12 @@ async function make() {
   }
 }
 
-function showResult(sec, w, h, name, simple) {
+function showResult(sec, w, h, bytes, name, simple) {
   const box = $('resultInfo'); box.textContent = '';
   const lines = [
     ['길이 ', `${sec.toFixed(1)}초`],
     ['해상도 ', `${w}×${h}`],
+    ['크기 ', `${(bytes / 1048576).toFixed(1)} MB`],
     ['파일 이름 ', name],
   ];
   for (const [k, v] of lines) {

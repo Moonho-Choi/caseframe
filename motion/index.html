@@ -99,7 +99,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 /* 사진이 없을 때 가운데 안내판 */
 .sheet-empty{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:min(560px,82%);aspect-ratio:3/2;padding:3.2%;cursor:pointer;
+  /* 판이 낮을 때(좁은 화면에서 세로로 쌓였을 때) 안내판이 판보다 커져 글씨가 잘렸다.
+     판 높이의 82%를 넘지 않게 눌러 준다. */
+  width:min(560px,82%);aspect-ratio:3/2;max-height:82%;padding:3.2%;cursor:pointer;
   background:var(--paper);
   box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12);
 }
@@ -198,8 +200,11 @@ body.drag #drop{display:block}
   .filmstrip{grid-template-columns:1fr}
   .film-hint{display:none}
   .film-info{border-right:0;padding:10px 14px 0}
-  .workspace{flex-direction:column}
-  .inspector{width:auto;max-height:240px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
+  /* 세로로 쌓이면 판과 조절판이 남은 높이를 나눠 갖다가 판이 0이 되어 사진·영상이
+     아예 안 보였다. 판에 최소 높이를 주고, 넘치는 만큼은 작업 영역이 스크롤한다. */
+  .workspace{flex-direction:column;overflow-y:auto}
+  #stage{flex:1 1 auto;min-height:52vh}
+  .inspector{width:auto;flex:none;max-height:none;overflow-y:visible;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
 }
 </style>
 </head>
