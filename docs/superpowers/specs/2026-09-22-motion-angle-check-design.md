@@ -1,7 +1,7 @@
 # 교정 진행 영상 도구 — 각도 검사(이웃 겹침 점수) 설계
 
 작성일: 2026-09-22
-상태: 원장 승인 (설계 단계)
+상태: 구현 완료, 공개 대기 (2026-09-22)
 바탕: [2026-09-22-motion-ui-v3-design.md](2026-09-22-motion-ui-v3-design.md). 바꾸는 파일: `motion/js/main.js`, `motion/index.html`, `motion/js/align.js`(점수 함수 추가), `motion/test/align.test.mjs`, `motion/README.md`.
 
 ## 1. 왜
