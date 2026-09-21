@@ -55,11 +55,32 @@ export function eccEuclid(cv, ga, gb, W) {
   return R && sane(R, W) ? R : null;
 }
 
+// 2×3 변환의 선형 부분을 가장 가까운 유사변환(균일 확대 + 회전)으로 바꾼다. 이동은 그대로 둔다.
+// 가장 가까운 회전각 θ = atan2(c−b, a+d), 그 방향의 배율 s = ((a+d)cosθ + (c−b)sinθ)/2.
+export function toSimilarity(M) {
+  const a = M[0], b = M[1], c = M[3], d = M[4];
+  const th = Math.atan2(c - b, a + d);
+  const s = ((a + d) * Math.cos(th) + (c - b) * Math.sin(th)) / 2;
+  const A = s * Math.cos(th), B = s * Math.sin(th);
+  return new Float64Array([A, -B, M[2], B, A, M[5]]);
+}
+
+// 미세 조정. ECC 아핀으로 맞춘 뒤 그 결과를 유사변환으로 되돌려 "형태 보존"한다 (2026-09-21 실험).
+// 아핀을 그대로 쓰면 각도가 다른 이웃에 맞추려고 사진을 가로세로 따로 늘려(실사진 25장 중
+// 6장이 11~20%) 치열궁이 넓적해졌다. 유사변환으로 투영하면 변형이 0이면서 이웃 일치도
+// 평균은 오히려 높았다(0.707 → 0.723). 투영할 때 사진 가운데가 가는 자리는 아핀 결과와
+// 같게 이동을 보정한다. 아핀 그대로 → 투영 → 초기값 순으로 정규화 상관이 높은 쪽만 채택.
 export function eccRefine(cv, ga, gb, M) {
   const mask = (w, h) => { const m = zerosMat(cv, h, w, cv.CV_8UC1); cv.rectangle(m, new cv.Point(Math.round(w * 0.12), Math.round(h * 0.05)), new cv.Point(Math.round(w * 0.88), Math.round(h * 0.95)), new cv.Scalar(255), -1); return m; };
   const { R, ctx } = runEcc(cv, ga, gb, M, cv.MOTION_AFFINE, 800, mask);
   let out = M;
-  if (R && sane(R, ga.cols)) { if (ncc(cv, ctx, R) > ncc(cv, ctx, M)) out = R; }
+  if (R && sane(R, ga.cols)) {
+    const cx = ga.cols / 2, cy = ga.rows / 2;
+    const P = toSimilarity(R);
+    const [px, py] = apply(R, cx, cy); const [qx, qy] = apply(P, cx, cy);
+    P[2] += px - qx; P[5] += py - qy;
+    if (ncc(cv, ctx, P) > ncc(cv, ctx, M)) out = P;
+  }
   freeCtx(ctx);
   return out;
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cvReady } from './_cv.mjs';
 import { makeTexture, warpGray, similarity } from './_synth.mjs';
-import { chainTransforms, eccRefine, medianFrame, alignedSize, cropRect, adjustMatrix, warpImage, neighborScores } from '../js/align.js';
+import { chainTransforms, eccRefine, toSimilarity, medianFrame, alignedSize, cropRect, adjustMatrix, warpImage, neighborScores } from '../js/align.js';
 import { apply, invert, compose } from '../js/features.js';
 
 test('chainTransforms brings 4 warped copies back onto one frame', async () => {
@@ -69,6 +69,27 @@ test('eccRefine improves a slightly wrong initial transform', async () => {
   const [rx, ry] = apply(rough, 320, 240);
   assert.ok(Math.hypot(x - ex, y - ey) < Math.hypot(rx - ex, ry - ey), 'closer than rough');
   a.delete(); b.delete();
+});
+
+test('eccRefine keeps shape: the result is a similarity (no anisotropic scale or shear)', async () => {
+  const cv = await cvReady();
+  const W = 640, H = 480; const a = makeTexture(cv, W, H, 7);
+  const M = similarity(1.04, -3, 10, 6); const b = warpGray(cv, a, M);
+  const rough = compose(invert(M), similarity(1, 0, 5, -4));
+  const R = eccRefine(cv, a, b, rough);
+  assert.ok(Math.abs(R[0] - R[4]) < 1e-9 && Math.abs(R[1] + R[3]) < 1e-9, `not a similarity: ${Array.from(R)}`);
+  a.delete(); b.delete();
+});
+
+test('toSimilarity: 유사변환은 그대로, 아핀은 가장 가까운 회전·균일 배율로', () => {
+  const S = similarity(1.1, 7, 3, -2);
+  const P = toSimilarity(S);
+  for (let k = 0; k < 6; k++) assert.ok(Math.abs(P[k] - S[k]) < 1e-9);
+  // 가로 1.2배·세로 0.9배로 따로 늘린 아핀 → 배율은 그 사이, 회전 0, 이동 유지
+  const A = new Float64Array([1.2, 0, 5, 0, 0.9, -3]);
+  const Q = toSimilarity(A);
+  assert.ok(Math.abs(Q[0] - 1.05) < 1e-9 && Math.abs(Q[1]) < 1e-9 && Math.abs(Q[3]) < 1e-9 && Math.abs(Q[4] - 1.05) < 1e-9);
+  assert.equal(Q[2], 5); assert.equal(Q[5], -3);
 });
 
 test('medianFrame of identical transforms is identity-like', () => {
