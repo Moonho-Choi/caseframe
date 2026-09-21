@@ -1,15 +1,20 @@
 import { loadFiles, monthsLabel, dateLabel, baseName } from './load.js';
 import { toGray } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
-import { chainTransforms, warpImage, alignedSize } from './align.js';
+import { chainTransforms, warpImage, alignedSize, neighborScores } from './align.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
 import { pickEncoder, Mp4Encoder, drawLabel, outputName } from './encode.js';
 import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
-const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
+// cache: 각도 검사에서 얻은 구도 맞추기 결과({ key, T, status, aligned }). aligned는 밝기·색을
+//        맞추기 **전**의 기준 틀 사진이라 영상 만들기가 그대로 이어받을 수 있다 (각도 검사 설계 §4).
+// angle:  각도 검사 결과({ scores, threshold, median, flagged:Set }).
+// job:    지금 도는 일 — 'make'(영상 만들기) 또는 'check'(각도 검사). 버튼 글씨·진행 몫이 다르다.
+const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false, cache: null, angle: null, job: 'make' };
 const MAX = 40;
+const MIN_CHECK = 3;               // 사진 3장 미만이면 이웃이 부족해 검사하지 않는다 (설계 §2)
 // RIFE 세션(21.6MB 모델 + GPU 버퍼)은 만들기를 누를 때마다 새로 올리면 그만큼씩 쌓인다.
 // 한 번 만든 세션을 계속 돌려 쓰고, 추론이 고장난 경우에만 버린다.
 let rifeCache = null;
@@ -45,12 +50,17 @@ function setState(s) {
   uiState = s;
   // 만들기 버튼은 조절판 안에 있고 저장 버튼은 따로 있다(v3 설계 §2). 만들기가
   // 저장으로 바뀌지 않으므로, 완성된 뒤에도 사진을 손보고 바로 다시 만들 수 있다.
-  const mk = $('makeBtn');
+  const mk = $('makeBtn'), ck = $('checkBtn');
   if (s === 'busy') {
-    mk.textContent = `만드는 중 ${jobPct}%`; mk.disabled = true;
+    // 각도 검사도 같은 잠금·진행 틀을 쓰므로, 지금 도는 일 쪽 버튼에만 퍼센트를 적는다.
+    mk.textContent = state.job === 'check' ? '영상 만들기' : `만드는 중 ${jobPct}%`;
+    ck.textContent = state.job === 'check' ? `검사 중 ${jobPct}%` : '각도 검사';
+    mk.disabled = ck.disabled = true;
   } else {
     mk.textContent = '영상 만들기';
     mk.disabled = state.items.length < 2 || locked();
+    ck.textContent = '각도 검사';
+    ck.disabled = state.items.length < MIN_CHECK || locked();
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
   // 만드는 중에는 화면에 걸린 영상이 곧 갈아치워질 이전 판이라 저장을 막는다.
@@ -94,7 +104,7 @@ function syncSettings() {
 // 단계마다 i/n을 따로 세면 "만드는 중 54%"까지 올라갔다가 다음 단계에서 0%로 떨어진다.
 // 만들기 한 판을 100으로 놓고 단계마다 몫을 정해, 그 안에서만 움직이게 한다.
 // [시작 지점, 이 단계의 몫] — 합이 100이다.
-const PHASE = {
+const PHASE_MAKE = {
   '구도 맞추는 중': [0, 15],
   '밝기·색 맞추는 중': [15, 5],
   '인공지능 모델 준비 중': [20, 0],
@@ -102,9 +112,16 @@ const PHASE = {
   '영상 파일 만드는 중': [95, 5],
   '완료': [100, 0],
 };
+// 각도 검사는 두 단계뿐이라 만들기의 몫을 그대로 쓰면 막대가 15%에서 멈춘 것처럼 보인다.
+const PHASE_CHECK = {
+  '구도 맞추는 중': [0, 80],
+  '겹침 점수 계산 중': [80, 20],
+  '완료': [100, 0],
+};
+let phases = PHASE_MAKE;           // 지금 도는 일의 단계 몫
 function progress(stage, i, n) {
   $('stageText').textContent = n ? `${stage} ${i}/${n}` : (stage || '');
-  const slice = PHASE[stage];
+  const slice = phases[stage];
   if (slice) {
     // 단계 순서가 정해져 있어도 되돌아가는 일이 없도록 지금까지의 최대값만 남긴다.
     jobPct = Math.max(jobPct, Math.min(100, Math.round(slice[0] + (n ? slice[1] * i / n : 0))));
@@ -114,7 +131,10 @@ function progress(stage, i, n) {
     jobPct = 0;
     $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%';
   }
-  if (uiState === 'busy') $('makeBtn').textContent = `만드는 중 ${jobPct}%`;
+  if (uiState === 'busy') {
+    if (state.job === 'check') $('checkBtn').textContent = `검사 중 ${jobPct}%`;
+    else $('makeBtn').textContent = `만드는 중 ${jobPct}%`;
+  }
 }
 // 남은 시간 = (경과 시간 / 처리한 프레임) × 남은 프레임, 10초마다 갱신 (설계 §3)
 let runStart = 0, etaAt = 0;
@@ -143,11 +163,14 @@ function thumbOf(it) {
 // 격자 카드와 사진 줄이 같은 형식을 쓴다: `번호 · 2023-02-20` (v3 설계 §4).
 // 날짜가 없는 사진은 파일 이름 앞토막으로 대신한다.
 function captionOf(it, i) { return `${i + 1} · ${it.date ? dateLabel(it.date) : baseName(it.name)}`; }
+// [CSS 이름, 글씨, 마우스를 올렸을 때 설명(없으면 빈 값)]. 여러 개가 함께 붙을 수 있다.
 function badgesFor(i) {
   const out = [], f = state.flags[i];
-  if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음']);
-  else if (f && f.warn === 'other') out.push(['other', '다른 방향?']);
-  if (state.status[i] === 'fail') out.push(['fail', '구도 실패']);
+  if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음', '']);
+  else if (f && f.warn === 'other') out.push(['other', '다른 방향?', '']);
+  if (state.status[i] === 'fail') out.push(['fail', '구도 실패', '']);
+  const a = state.angle;
+  if (a && a.flagged.has(i)) out.push(['angle', '이웃과 많이 다름', `겹침 점수 ${a.scores[i].toFixed(2)} (기준 ${a.threshold.toFixed(2)})`]);
   return out;
 }
 // 순서 바꾸기·파일 받기는 큰 카드와 작은 사진이 똑같이 동작한다.
@@ -189,7 +212,7 @@ function renderGrid() {
     const bl = badgesFor(i);
     if (bl.length) {
       const wrap = document.createElement('div'); wrap.className = 'badges';
-      for (const [cls, text] of bl) { const s = document.createElement('span'); s.className = `badge ${cls}`; s.textContent = text; wrap.appendChild(s); }
+      for (const [cls, text, tip] of bl) { const s = document.createElement('span'); s.className = `badge ${cls}`; s.textContent = text; if (tip) s.title = tip; wrap.appendChild(s); }
       d.appendChild(wrap);
     }
     d.appendChild(btnRow(i, lock, [
@@ -219,8 +242,9 @@ function renderStrip() {
     const bl = badgesFor(i);
     if (bl.length) {
       const tags = document.createElement('div'); tags.className = 'tags';
-      bl.forEach(([cls, text], k) => {
+      bl.forEach(([cls, text, tip], k) => {
         const sp = document.createElement('span'); sp.className = cls; sp.textContent = (k ? ' · ' : '') + text;
+        if (tip) sp.title = tip;
         tags.appendChild(sp);
       });
       d.appendChild(tags);
@@ -239,6 +263,20 @@ function render() { renderGrid(); renderStrip(); syncState(); }
 // 길이·순서가 항상 같아야 한다. 어긋나면(예: 아직 한 번도 만들기를 안 돌렸거나, 다른
 // 조작으로 길이가 안 맞으면) 통째로 비워서 엉뚱한 사진에 회색 "구도 실패" 표시가
 // 붙는 사고를 막는다 — 어차피 사진 구성이 바뀌면 다시 만들기를 눌러야 최신 상태가 된다.
+// ── 각도 검사 캐시 ────────────────────────────────────────────
+// 캐시가 지금 화면의 사진 구성에서 나온 것인지 가리는 열쇠. 이름·순서·뒤집은 횟수를 잇는다
+// (같은 사진을 두 번 뒤집으면 원래대로 돌아오지만 그동안 그림이 바뀌었으므로 횟수를 센다).
+function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}`).join('|'); }
+function setCheckNote(t) { $('checkNote').textContent = t; }
+// 사진을 하나라도 건드리면 구도 맞추기 결과도 겹침 점수도 더 이상 맞지 않는다.
+// 배지를 지우고, 이미 한 번 검사한 뒤였다면 다시 검사하라고 알린다 (설계 §3).
+function invalidateCheck() {
+  state.cache = null;
+  const had = !!state.angle;
+  state.angle = null;
+  if (had) setCheckNote('다시 검사하세요');
+}
+
 function move(i, d) { moveTo(i, i + d); }
 function moveTo(from, to) {
   if (locked()) return;
@@ -247,6 +285,7 @@ function moveTo(from, to) {
   else state.status = [];
   const [it] = state.items.splice(from, 1); state.items.splice(to, 0, it);
   const [f] = state.flags.splice(from, 1); state.flags.splice(to, 0, f);
+  invalidateCheck();
   leaveDone(); render();
 }
 function flip(i) {
@@ -254,7 +293,9 @@ function flip(i) {
   state.items[i].image = flipImageData(state.items[i].image); state.items[i].thumb = null; state.flags[i] = { warn: null };
   // 사용자가 직접 정한 방향은 나중에 사진을 더 넣어도 자동 판정이 뒤엎지 않는다.
   state.items[i].userFlipped = true;
+  state.items[i].flips = (state.items[i].flips || 0) + 1;
   state.status = []; // 뒤집으면 이전 정합 결과가 더 이상 맞지 않는다
+  invalidateCheck();
   leaveDone(); render();
 }
 function remove(i) {
@@ -262,6 +303,7 @@ function remove(i) {
   if (state.status.length === state.items.length) state.status.splice(i, 1);
   else state.status = [];
   state.items.splice(i, 1); state.flags.splice(i, 1);
+  invalidateCheck();
   leaveDone(); render();
 }
 
@@ -281,6 +323,7 @@ async function addFiles(files) {
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
     state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
     state.status = [];
+    invalidateCheck();
     const cv = await cvReady();
     progress('방향 검사 중');
     // toGray가 도중에 터져도 그때까지 만든 Mat이 finally에서 풀리도록 하나씩 담는다
@@ -319,9 +362,69 @@ function applyOrientation(res, prevCount) {
   });
 }
 
+const median = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+
+// ── 각도 검사 ─────────────────────────────────────────────────
+// 각도가 크게 다른 사진이 섞이면 영상이 어른거린다. 자동으로 빼지는 않고, 이웃과 잘
+// 겹치지 않는 사진에 주황 배지를 붙여 원장이 ✕로 빼도록 한다 (각도 검사 설계 §1).
+// 만들기(make)와 같은 잠금·취소·진행·자원 정리 틀을 쓴다.
+async function checkAngles() {
+  if (state.busy || state.loading) return;
+  if (state.items.length < MIN_CHECK) { toast(`사진이 ${MIN_CHECK}장 이상일 때 검사할 수 있습니다.`); return; }
+  state.busy = true; state.cancelled = false; state.job = 'check'; phases = PHASE_CHECK;
+  // 앞선 검사 결과는 먼저 지운다 — 도중에 취소하면 낡은 배지가 남아 있으면 안 된다.
+  state.angle = null; setCheckNote('');
+  uiState = 'ready';                 // 배지는 격자 카드에 붙으므로 결과 영상 화면은 내려 둔다
+  jobPct = 0; $('eta').textContent = '';
+  render();
+  const cancelled = () => state.cancelled;
+  let grays = null;
+  try {
+    const cv = await cvReady();
+    const W = state.items[0].image.width, H = state.items[0].image.height;
+    const key = cacheKey();
+    let T, status, aligned;
+    if (state.cache && state.cache.key === key) {
+      ({ T, status, aligned } = state.cache);
+      progress('구도 맞추는 중', 1, 1);
+    } else {
+      state.cache = null;
+      grays = [];
+      for (const it of state.items) grays.push(toGray(cv, it.image));
+      ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
+      grays.forEach(g => g.delete()); grays = null;
+      if (cancelled()) throw new Error('취소');
+      // 밝기·색 맞추기 **전**의 기준 틀 사진을 담아 둔다. 영상 만들기가 이 배열을 그대로
+      // 이어받아 구도 맞추기를 통째로 건너뛴다 (설계 §4).
+      aligned = state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H));
+      state.cache = { key, T, status, aligned };
+    }
+    state.status = status; render();
+    if (cancelled()) throw new Error('취소');
+    progress('겹침 점수 계산 중');
+    const scores = await neighborScores(cv, aligned, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
+    const med = median(scores), threshold = 0.75 * med;
+    const flagged = new Set();
+    scores.forEach((s, i) => { if (s < threshold) flagged.add(i); });
+    state.angle = { scores, threshold, median: med, flagged };
+    progress('완료');
+    setCheckNote(`각도 검사: ${flagged.size}장 표시 (중앙값 ${med.toFixed(2)})`);
+    toast(flagged.size
+      ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ✕로 빼면 영상이 매끄러워집니다.`
+      : '모든 사진이 고르게 겹칩니다.');
+  } catch (e) {
+    toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e));
+    state.angle = null; setCheckNote(''); progress('');
+  } finally {
+    if (grays) { grays.forEach(g => g.delete()); grays = null; }
+    state.busy = false; state.job = 'make'; phases = PHASE_MAKE;
+    render();
+  }
+}
+
 async function make() {
   if (state.busy || state.loading) return;
-  state.busy = true; state.cancelled = false;
+  state.busy = true; state.cancelled = false; state.job = 'make'; phases = PHASE_MAKE;
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
   jobPct = 0; $('eta').textContent = '';
   // 잠금 표시는 여기서 바로 그려야 한다. 예전에는 chainTransforms가 끝난 뒤에야
@@ -333,13 +436,26 @@ async function make() {
   try {
     const cv = await cvReady();
     const W = state.items[0].image.width, H = state.items[0].image.height;
-    grays = [];
-    for (const it of state.items) grays.push(toGray(cv, it.image));
-    const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
-    grays.forEach(g => g.delete()); grays = null; state.status = status; render();
+    // 각도 검사가 이미 같은 사진 구성으로 구도를 맞춰 뒀으면 그 결과를 그대로 쓴다.
+    // 제일 오래 걸리는 단계라, 검사 뒤 바로 만들면 그만큼 시간이 통째로 빠진다 (설계 §4).
+    let warped, status;
+    if (state.cache && state.cache.key === cacheKey()) {
+      status = state.cache.status; warped = state.cache.aligned;
+      progress('구도 맞추는 중', 1, 1);      // 막대는 이 단계 몫을 한 번에 채운다
+    } else {
+      state.cache = null;
+      grays = [];
+      for (const it of state.items) grays.push(toGray(cv, it.image));
+      const chain = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
+      grays.forEach(g => g.delete()); grays = null;
+      status = chain.status;
+      warped = state.items.map((it, i) => warpImage(cv, it.image, chain.T[i], W, H));
+    }
+    state.status = status; render();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
-    const aligned = await matchColors(state.items.map((it, i) => warpImage(cv, it.image, T[i], W, H)), (i, n) => progress('밝기·색 맞추는 중', i, n), cancelled);
+    // matchColors는 새 배열·새 사진을 돌려주므로 캐시의 aligned는 그대로 살아남는다.
+    const aligned = await matchColors(warped, (i, n) => progress('밝기·색 맞추는 중', i, n), cancelled);
     const { cw, ch } = alignedSize(W, H);
     const stepSec = +$('step').value, { N, fps } = planTiming(stepSec);
     const quality = $('quality').value;
@@ -444,6 +560,8 @@ function remake() { $('video').pause(); uiState = 'ready'; progress(''); render(
 function clearAll() {
   if (locked()) return;
   state.items = []; state.flags = []; state.status = [];
+  // 사진이 하나도 없으니 "다시 검사하세요"가 아니라 결과 줄까지 통째로 비운다.
+  invalidateCheck(); setCheckNote('');
   if (lastUrl) { URL.revokeObjectURL(lastUrl); lastUrl = null; }
   lastName = '';
   // src=''로 지우면 브라우저가 페이지 주소를 영상으로 다시 받으러 간다. 속성을 떼고 비운다.
@@ -501,6 +619,7 @@ window.addEventListener('drop', e => {
 });
 
 // ── 연결 ─────────────────────────────────────────────────────
+$('checkBtn').onclick = checkAngles;
 $('makeBtn').onclick = make;
 $('saveBtn').onclick = save;
 $('saveBtn2').onclick = save;
