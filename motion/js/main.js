@@ -28,7 +28,12 @@ let jobPct = 0;                    // 만들기 한 판 전체의 진행률(0~10
 let toastTimer;
 function toast(msg) {
   if (!msg) return;
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  const t = $('toast');
+  // 한 틱 안에 알림이 여러 번 뜨면(예: "40장까지만" 다음 곧바로 "비율이 달라") 뒤엣것이
+  // 앞엣것을 지워 버려 사용자가 첫 알림을 못 본다. 아직 떠 있는 알림이 있으면 지우지 않고
+  // 새 줄에 이어 붙이고, 타이머만 늘린다.
+  t.textContent = t.classList.contains('show') ? `${t.textContent}\n${msg}` : msg;
+  t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
 }
 
@@ -66,7 +71,7 @@ function syncState() {
   setState(state.items.length ? 'ready' : 'empty');
 }
 // 사진 구성을 건드리면 화면에 걸린 영상은 더 이상 그 사진들의 결과가 아니다.
-function leaveDone() { if (uiState === 'done') uiState = 'ready'; }
+function leaveDone() { if (uiState === 'done') { uiState = 'ready'; progress(''); } }
 function syncSettings() {
   const lock = locked();
   $('quality').disabled = gpuLocked || lock;
@@ -154,7 +159,7 @@ function btnRow(i, lock, defs) {
   const b = document.createElement('div'); b.className = 'btns';
   for (const [t, title, fn] of defs) {
     const x = document.createElement('button');
-    x.textContent = t; x.title = title; x.onclick = ev => { ev.stopPropagation(); fn(); }; x.disabled = lock;
+    x.textContent = t; x.title = title; x.setAttribute('aria-label', title); x.onclick = ev => { ev.stopPropagation(); fn(); }; x.disabled = lock;
     b.appendChild(x);
   }
   return b;
@@ -241,7 +246,7 @@ function remove(i) {
 }
 
 async function addFiles(files) {
-  if (state.loading || state.busy) return; // 읽는 중이거나 영상 만드는 중이면 무시
+  if (locked()) { toast('영상을 만드는 중에는 사진을 넣을 수 없습니다. 취소 후 넣어 주세요.'); return; }
   state.loading = true; leaveDone(); render();
   let grays = null;
   try {
@@ -409,7 +414,7 @@ function save() {
   document.body.appendChild(a); a.click(); a.remove();
   toast('저장됨: ' + lastName);
 }
-function remake() { uiState = 'ready'; render(); }
+function remake() { $('video').pause(); uiState = 'ready'; progress(''); render(); }
 function clearAll() {
   if (locked()) return;
   state.items = []; state.flags = []; state.status = [];
@@ -437,7 +442,7 @@ function hasFiles(e) { return [...(e.dataTransfer?.types || [])].includes('Files
 function endDrag() { dragDepth = 0; document.body.classList.remove('drag'); }
 window.addEventListener('dragenter', e => {
   e.preventDefault();
-  if (!hasFiles(e)) return;
+  if (!hasFiles(e) || locked()) return;
   dragDepth++; document.body.classList.add('drag');
 });
 window.addEventListener('dragover', e => e.preventDefault());
@@ -459,9 +464,10 @@ $('saveBtn2').onclick = save;
 $('remakeBtn').onclick = remake;
 $('clearBtn').onclick = clearAll;
 $('cancel').onclick = () => { state.cancelled = true; };
-$('bOpen').onclick = () => $('file').click();
+$('bOpen').onclick = () => { if (!locked()) $('file').click(); };
 $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('emptySheet').onclick = () => { if (!locked()) $('file').click(); };
+$('emptySheet').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!locked()) $('file').click(); } });
 $('bFs').onclick = toggleFs;
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
 $('label').onchange = () => { if (!$('label').disabled) labelPref = $('label').checked; };

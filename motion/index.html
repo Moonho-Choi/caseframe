@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
 <meta name="description" content="같은 방향으로 찍은 교정 진행 사진을 넣으면 치아가 움직이는 영상(MP4)을 브라우저 안에서 만듭니다. 사진은 서버로 전송되지 않습니다.">
 <title>교정 진행 영상 — CaseFrame</title>
 <style>
@@ -46,7 +45,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 }
 .btn:hover{border-color:rgba(255,255,255,.18);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03) 50%,rgba(255,255,255,.05))}
 .btn svg{width:14px;height:14px;flex:none}
-.btn.ghost{background:transparent}
 .btn.primary{
   border-color:rgba(53,199,176,.5); color:#06231D; font-weight:700;
   background:linear-gradient(180deg,#4ADBC3,#1E9B84);
@@ -190,6 +188,7 @@ body.locked .card{cursor:default}
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
   background:#000c;color:#fff;padding:10px 18px;border-radius:8px;max-width:80vw;text-align:center;
+  white-space:pre-line;
   opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;
 }
 #toast.show{opacity:1}
@@ -266,8 +265,8 @@ body.drag #drop{display:block}
           <option value="fast">빠르게</option>
         </select>
       </label>
-      <div class="control-title"><span>한 단계 시간</span><span class="value" id="stepv">1.2초</span></div>
-      <input id="step" type="range" min="0.5" max="2" step="0.1" value="1.2">
+      <div class="control-title" id="stepLabel"><span>한 단계 시간</span><span class="value" id="stepv">1.2초</span></div>
+      <input id="step" type="range" min="0.5" max="2" step="0.1" value="1.2" aria-labelledby="stepLabel">
       <label class="field check" style="margin-top:10px"><input type="checkbox" id="label" checked> <span>경과 글씨 넣기</span></label>
     </div>
     <div class="control-section">
@@ -312,7 +311,7 @@ body.drag #drop{display:block}
 <footer class="sitebar">제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a> &middot; <a href="/">CaseFrame으로 돌아가기</a></footer>
 
 <div id="drop"></div>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <script src="../vendor/opencv.js" async onerror="var t=document.getElementById('toast');t.textContent='OpenCV 파일을 불러오지 못했습니다. 새로고침해 주세요.';t.className='show'"></script>
 <script type="module" src="js/main.js"></script>
 </body>
