@@ -113,6 +113,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .badge.angle{color:#1A0E05;border-color:#FF8A3D;background:#FF8A3D}
 /* 영상에서 뺀 사진: 회색 배지 (제외 설계 §2) */
 .badge.excluded{color:#b9c5d1;border-color:#7d8d9d}
+/* 크게 보기에서 미세회전한 사진: 청록 작은 배지 (회전 설계 §3) */
+.badge.rot{color:var(--accent);border-color:var(--accent)}
 /* 뺀 사진은 그 자리에 그대로 두되 흐리게 — ↩로 언제든 되돌릴 수 있다 (제외 설계 §2) */
 .card.excluded,.asset.excluded{opacity:.45;filter:grayscale(.6)}
 .card .btns{position:absolute;right:7px;top:7px;display:flex;gap:3px}
@@ -211,6 +213,7 @@ input:disabled,select:disabled{opacity:.4;cursor:default}
 .asset .tags .fail{color:#b9c5d1}
 .asset .tags .angle{color:#FF8A3D}
 .asset .tags .excluded{color:#b9c5d1}
+.asset .tags .rot{color:var(--accent)}
 .asset .btns{position:absolute;right:3px;top:3px;display:flex;gap:2px}
 .asset .btns button{
   width:19px;height:19px;display:grid;place-items:center;font-size:10px;color:#e8eef4;

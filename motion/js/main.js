@@ -166,6 +166,58 @@ function etaUpdate(done, total) {
   $('eta').textContent = m ? `남은 시간 약 ${m}분 ${s}초` : `남은 시간 약 ${s}초`;
 }
 
+// ── 사진 한 장 다시 만들기 (뒤집기·회전) ──────────────────────
+// 사진 한 장은 세 가지로 적어 둔다 (회전 설계 §3).
+//   it.original — 읽은 직후의 ImageData. 절대 손대지 않는다.
+//   it.flipped  — 좌우 뒤집힘(자동 판정 + 사용자 ⇄의 최종 상태)
+//   it.rotation — 미세회전(도, 기본 0)
+// it.image(표시·계산용)는 언제나 original에서 "뒤집기 → 회전" 순으로 **다시** 만든다.
+// 예전처럼 image를 그때그때 덮어쓰면 뒤집기·회전을 반복할수록 다시 표본한 그림이
+// 쌓여 화질이 깎인다. 원본에서 한 번에 만들면 몇 번을 고쳐도 손실이 한 번뿐이다.
+function degLabel(deg) { return `${deg > 0 ? '+' : '-'}${Math.abs(deg).toFixed(1)}°`; }
+// 회전하면 네 모서리가 비는데, 검게 두면 영상에서 그 자리가 깜빡인다. OpenCV의
+// BORDER_REPLICATE와 비슷한 효과를 캔버스만으로 내려고, 회전한 사진을 얹기 전에
+// 같은 사진을 살짝 키워(빈 모서리를 덮을 만큼) 바탕에 깔아 둔다 (설계 §3).
+function coverScale(deg) {
+  const r = Math.abs(deg) * Math.PI / 180;
+  return Math.cos(r) + Math.sin(r);
+}
+// ctx 변환만으로 "뒤집기 → 회전"을 한 번에 그린다. 뷰어 미리보기와 rotateImageData가
+// 같은 함수를 쓰므로, 슬라이더로 본 그림과 실제로 적용되는 그림이 어긋나지 않는다.
+function drawOriented(ctx, src, w, h, deg, flipped) {
+  const s = coverScale(deg);
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  if (flipped) ctx.scale(-1, 1);
+  ctx.drawImage(src, -w * s / 2, -h * s / 2, w * s, h * s);   // 빈 모서리를 채울 바탕
+  ctx.restore();
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  if (flipped) ctx.scale(-1, 1);
+  ctx.drawImage(src, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+function canvasOf(image) {
+  const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
+  c.getContext('2d').putImageData(image, 0, 0);
+  return c;
+}
+// 뒤집기도 회전도 없으면 original을 그대로 가리킨다(사진 한 장이 4.4MB라 사본을 하나
+// 덜 만든다). 그래서 it.image의 픽셀을 그 자리에서 고치면 안 된다 — 고칠 일이 있으면
+// 여기서 새로 만든다.
+function rebuildImage(it) {
+  const deg = it.rotation || 0;
+  if (!deg && !it.flipped) { it.image = it.original; it.thumb = null; return; }
+  if (!deg) { it.image = flipImageData(it.original); it.thumb = null; return; }
+  const w = it.original.width, h = it.original.height;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  drawOriented(ctx, canvasOf(it.original), w, h, deg, !!it.flipped);
+  it.image = ctx.getImageData(0, 0, w, h);
+  it.thumb = null;
+}
+
 // ── 사진 그리기 (격자와 사진 줄은 같은 state.items에서 그린다) ──
 // 작은 그림은 만들 때마다 1280px 원본을 JPEG로 다시 짜내야 해서 40장이면 화살표 한
 // 번에 1초씩 멈춘다. 사진에 붙여 두고 좌우를 뒤집을 때만 다시 만든다.
@@ -189,6 +241,9 @@ function badgesFor(i) {
   if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음', '']);
   else if (f && f.warn === 'other') out.push(['other', '다른 방향?', '']);
   if (state.status[i] === 'fail') out.push(['fail', '구도 실패', '']);
+  // 미세회전한 사진에는 청록 배지를 붙여, 크게 보기에서 손댄 사진을 격자에서도 알아본다 (회전 설계 §3).
+  const rot = state.items[i].rotation || 0;
+  if (rot) out.push(['rot', `회전 ${degLabel(rot)}`, '크게 보기에서 미세회전한 사진입니다']);
   const a = state.angle;
   if (a && a.flagged.has(i)) out.push(['angle', '이웃과 많이 다름', `겹침 점수 ${a.scores[i].toFixed(2)} (기준 ${a.threshold.toFixed(2)})`]);
   return out;
@@ -295,7 +350,9 @@ function render() { renderGrid(); renderStrip(); syncState(); }
 // 캐시가 지금 화면의 사진 구성에서 나온 것인지 가리는 열쇠. 이름·순서·뒤집은 횟수를 잇는다
 // (같은 사진을 두 번 뒤집으면 원래대로 돌아오지만 그동안 그림이 바뀌었으므로 횟수를 센다).
 // 제외 여부도 함께 잇는다 — 한 장을 빼면 구도 맞추기 사슬 자체가 달라지기 때문이다 (제외 설계 §2).
-function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}`).join('|'); }
+// 미세회전도 그림을 바꾸므로 열쇠에 넣는다 — 회전만 고치고 다시 만들면 낡은 구도
+// 맞추기 결과를 이어받아 엉뚱한 틀로 영상이 나온다 (회전 설계 §3).
+function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}:${it.excluded ? 1 : 0}:${it.rotation || 0}`).join('|'); }
 function setCheckNote(t) { $('checkNote').textContent = t; }
 // 사진을 하나라도 건드리면 구도 맞추기 결과도 겹침 점수도 더 이상 맞지 않는다.
 // 배지를 지우고, 이미 한 번 검사한 뒤였다면 다시 검사하라고 알린다 (설계 §3).
@@ -319,10 +376,14 @@ function moveTo(from, to) {
 }
 function flip(i) {
   if (locked()) return;
-  state.items[i].image = flipImageData(state.items[i].image); state.items[i].thumb = null; state.flags[i] = { warn: null };
+  const it = state.items[i];
+  // 뒤집기는 이제 표시만 바꾸는 깃발이다. 그림은 원본에서 다시 만든다 (회전 설계 §3).
+  it.flipped = !it.flipped;
+  rebuildImage(it);
+  state.flags[i] = { warn: null };
   // 사용자가 직접 정한 방향은 나중에 사진을 더 넣어도 자동 판정이 뒤엎지 않는다.
-  state.items[i].userFlipped = true;
-  state.items[i].flips = (state.items[i].flips || 0) + 1;
+  it.userFlipped = true;
+  it.flips = (it.flips || 0) + 1;
   state.status = []; // 뒤집으면 이전 정합 결과가 더 이상 맞지 않는다
   invalidateCheck();
   leaveDone(); render();
@@ -349,6 +410,9 @@ async function addFiles(files) {
     if (arr.length > list.length) toast(`한 번에 ${MAX}장까지만 넣을 수 있어 앞 ${list.length}장만 받았습니다.`);
     progress('사진 읽는 중');
     const { items, skipped } = await loadFiles(list, 1280);
+    // 원본은 자동 뒤집기가 돌기 **전에** 잡아 둔다. 이 뒤로 뒤집기·회전은 전부
+    // original에서 다시 만들므로, 여기서 한 번 놓치면 영영 손상된 그림만 남는다.
+    items.forEach(it => { it.original = it.image; it.flipped = false; it.rotation = 0; });
     if (skipped.length) toast(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
     // 번호는 여기서 한 번만 정하고 다시는 바뀌지 않는다. loadFiles가 이미 날짜순으로
@@ -396,7 +460,7 @@ function applyOrientation(res, active, prevCount) {
     const { it, i } = active[k];
     if (k < prevCount || it.userFlipped) return;
     const doFlip = opposite ? !r.flip : r.flip;
-    if (doFlip) { it.image = flipImageData(it.image); it.thumb = null; }
+    if (doFlip) { it.flipped = !it.flipped; rebuildImage(it); }
     state.flags[i] = { warn: doFlip ? 'flip' : (r.warn === 'other' ? 'other' : null) };
   });
 }
