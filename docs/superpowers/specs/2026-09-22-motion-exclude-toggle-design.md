@@ -1,7 +1,7 @@
 # 교정 진행 영상 도구 — 제외 토글·고정 번호·각도 검사 버튼 색 설계
 
 작성일: 2026-09-22
-상태: 원장 승인 (설계 단계)
+상태: 구현 완료, 공개 대기 (2026-09-22)
 바탕: [2026-09-22-motion-angle-check-design.md](2026-09-22-motion-angle-check-design.md). 바꾸는 파일: `motion/js/main.js`, `motion/index.html`, `motion/README.md`.
 
 ## 1. 왜
