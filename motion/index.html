@@ -147,6 +147,20 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 #video{flex:1;min-height:0;width:100%;height:100%;object-fit:contain;background:#000;border-radius:8px}
 .video-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
+/* 크게 보기(뷰어): 영상 화면과 같은 자리·같은 크기로 판을 덮는다 (회전 설계 §2) */
+#viewer{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg)}
+#viewer[hidden]{display:none}
+.view-cap{flex:none;text-align:center;color:#c7d2dc;font-size:12.5px;min-height:17px}
+.view-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000;border-radius:8px}
+#viewCanvas{max-width:100%;max-height:100%;display:block}
+.view-rot{flex:none;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.view-rot input[type=range]{width:min(420px,42vw)}
+#rotValue{min-width:54px;text-align:right;color:var(--text);font-size:13px;font-weight:700}
+.view-rot label.check{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text)}
+.view-rot input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+.view-rot input:disabled+span{opacity:.4}
+.view-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
 /* ── 오른쪽 조절판 ── */
 .inspector{
   flex:none;width:280px;overflow-y:auto;
@@ -293,6 +307,24 @@ body.drag #drop{display:block}
         </div>
       </div>
     </div>
+    <div id="viewer" hidden>
+      <div class="view-cap" id="viewCap"></div>
+      <div class="view-stage"><canvas id="viewCanvas"></canvas></div>
+      <div class="view-rot">
+        <span id="rotLabel">미세회전</span>
+        <input id="rotSlider" type="range" min="-10" max="10" step="0.5" value="0" aria-labelledby="rotLabel">
+        <span id="rotValue">0.0°</span>
+        <button class="btn" id="rotZero" title="회전을 0도로 되돌립니다">0°</button>
+        <label class="check"><input type="checkbox" id="onion"><span>앞 사진 겹쳐 보기</span></label>
+      </div>
+      <div class="view-actions">
+        <button class="btn" id="viewPrev" title="앞 사진 (←)">◀ 이전</button>
+        <button class="btn" id="viewNext" title="뒤 사진 (→)">다음 ▶</button>
+        <button class="btn" id="viewFlip" title="좌우 뒤집기">⇄ 뒤집기</button>
+        <button class="btn" id="viewExclude" title="영상에서 빼기">✕ 빼기</button>
+        <button class="btn primary" id="viewClose" title="닫기 (Esc)">닫기</button>
+      </div>
+    </div>
     <div id="videoWrap" hidden>
       <video id="video" controls playsinline></video>
       <div class="video-actions">
@@ -347,7 +379,8 @@ body.drag #drop{display:block}
         촬영 팁: 카메라 각도와 거리를 매번 비슷하게 맞추면 영상이 훨씬 매끄럽습니다.<br>
         25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
         노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
-        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.
+        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.<br>
+        사진을 클릭하면 크게 보입니다. 거기서 슬라이더로 미세회전하고, 앞 사진을 겹쳐 볼 수 있습니다(Esc 닫기, ←/→ 이동).
       </div>
     </div>
   </aside>

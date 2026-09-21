@@ -23,7 +23,7 @@ let rifeCache = null;
 let lastUrl = null;
 let lastName = '';                 // 저장 버튼이 쓸 파일 이름
 let gpuLocked = false;             // WebGPU가 없어 품질을 "빠르게"로 고정한 경우
-let uiState = 'empty';             // empty | ready | busy | done
+let uiState = 'empty';             // empty | ready | busy | done | view(크게 보기)
 let jobPct = 0;                    // 만들기 한 판 전체의 진행률(0~100)
 
 // ── 알림(토스트) ───────────────────────────────────────────────
@@ -91,14 +91,20 @@ function setState(s) {
     }
   }
   $('emptySheet').style.display = s === 'empty' ? '' : 'none';
-  $('grid').style.display = s === 'done' ? 'none' : '';
+  $('grid').style.display = (s === 'done' || s === 'view') ? 'none' : '';
   $('videoWrap').hidden = s !== 'done';
+  // 크게 보기는 영상 화면과 같은 자리를 쓴다 — 둘이 함께 보이는 일은 없다 (회전 설계 §2).
+  $('viewer').hidden = s !== 'view';
   $('cancel').disabled = s !== 'busy';
   document.body.classList.toggle('locked', locked());
   syncSettings();
+  if (s === 'view') syncViewer();
 }
 function syncState() {
   if (state.busy) { setState('busy'); return; }
+  // 사진이 한 장도 없으면(전부 비우기) 크게 보기를 유지할 수 없다.
+  if (uiState === 'view' && state.items[viewIdx]) { setState('view'); return; }
+  if (uiState === 'view') viewIdx = -1;
   if (uiState === 'done') { setState('done'); return; }
   setState(state.items.length ? 'ready' : 'empty');
 }
@@ -174,7 +180,7 @@ function etaUpdate(done, total) {
 // it.image(표시·계산용)는 언제나 original에서 "뒤집기 → 회전" 순으로 **다시** 만든다.
 // 예전처럼 image를 그때그때 덮어쓰면 뒤집기·회전을 반복할수록 다시 표본한 그림이
 // 쌓여 화질이 깎인다. 원본에서 한 번에 만들면 몇 번을 고쳐도 손실이 한 번뿐이다.
-function degLabel(deg) { return `${deg > 0 ? '+' : '-'}${Math.abs(deg).toFixed(1)}°`; }
+function degLabel(deg) { return `${deg > 0 ? '+' : deg < 0 ? '-' : ''}${Math.abs(deg).toFixed(1)}°`; }
 // 회전하면 네 모서리가 비는데, 검게 두면 영상에서 그 자리가 깜빡인다. OpenCV의
 // BORDER_REPLICATE와 비슷한 효과를 캔버스만으로 내려고, 회전한 사진을 얹기 전에
 // 같은 사진을 살짝 키워(빈 모서리를 덮을 만큼) 바탕에 깔아 둔다 (설계 §3).
@@ -286,7 +292,10 @@ function renderGrid() {
     const d = document.createElement('div'); d.className = 'card';
     if (state.status[i] === 'fail') d.classList.add('fail');
     if (it.excluded) d.classList.add('excluded');
-    d.title = it.name;
+    d.title = `${it.name} — 누르면 크게 보기`;
+    // 사진을 누르면 크게 보기로 들어간다. 위에 얹힌 ◀▶⇄✕ 버튼은 btnRow에서
+    // stopPropagation 하므로 여기까지 오지 않는다 (회전 설계 §2).
+    d.onclick = () => openViewer(i);
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
     const no = document.createElement('div'); no.className = 'num';
     no.textContent = captionOf(it);
@@ -342,6 +351,106 @@ function renderStrip() {
 }
 function render() { renderGrid(); renderStrip(); syncState(); }
 
+// ── 크게 보기 (뷰어) ──────────────────────────────────────────
+// 격자 카드를 누르면 가운데 판이 뷰어로 바뀐다. 사진을 크게 확인하고, 기울어 찍힌
+// 사진을 슬라이더로 조금 돌려 놓는 자리다 (회전 설계 §2).
+// 슬라이더 값은 "아직 적용하지 않은 값"이고, 뷰어를 닫거나 다른 사진으로 넘어갈 때
+// 한 번에 적용한다(commitRotation). 별도 "적용" 버튼은 없다.
+let viewIdx = -1;
+let viewSrc = null;                // { it, canvas } 지금 사진의 원본 캔버스(회전 전)
+let viewOnionSrc = null;           // { key, canvas } 겹쳐 볼 앞 사진(최종본)
+// 겹쳐 보기는 "바로 앞 순서의 **포함된** 사진"과 비교한다. 뺀 사진은 영상에 없으므로
+// 그것과 각도를 맞춰 봐야 소용이 없다.
+function prevIncluded(i) {
+  for (let k = i - 1; k >= 0; k--) if (!state.items[k].excluded) return k;
+  return -1;
+}
+
+function openViewer(i) {
+  if (locked() || !state.items[i]) return;
+  if (uiState === 'done') leaveDone();      // 결과 영상 자리를 뷰어가 쓴다
+  viewIdx = i;
+  uiState = 'view';
+  $('rotSlider').value = String(state.items[i].rotation || 0);
+  render();
+}
+// 닫기·이동·다른 작업으로 뷰어를 떠날 때 슬라이더 값을 사진에 적용한다.
+function commitRotation() {
+  const it = state.items[viewIdx];
+  if (!it) return;
+  const deg = +$('rotSlider').value;
+  if (deg === (it.rotation || 0)) return;
+  it.rotation = deg;
+  rebuildImage(it);                  // 작은 그림(thumb)도 여기서 버려진다
+  state.status = [];                 // 회전하면 이전 구도 맞추기 결과가 맞지 않는다
+  invalidateCheck();
+  leaveDone();
+}
+function closeViewer() {
+  if (uiState !== 'view') return;
+  commitRotation();
+  viewIdx = -1; viewSrc = null; viewOnionSrc = null;
+  uiState = state.items.length ? 'ready' : 'empty';
+}
+// 사진을 전부 비울 때처럼 적용할 대상이 사라지는 경우는 값을 버리고 나온다.
+function discardViewer() {
+  viewIdx = -1; viewSrc = null; viewOnionSrc = null;
+  if (uiState === 'view') uiState = 'ready';
+}
+function stepViewer(d) {
+  const j = viewIdx + d;
+  if (uiState !== 'view' || !state.items[j]) return;
+  commitRotation();
+  viewIdx = j;
+  $('rotSlider').value = String(state.items[j].rotation || 0);
+  render();
+}
+// 뷰어 화면 전체를 지금 상태에 맞춘다(setState가 부른다).
+function syncViewer() {
+  const it = state.items[viewIdx];
+  if (!it) return;
+  $('viewCap').textContent = captionOf(it) + (it.excluded ? ' · 제외' : '');
+  // 슬라이더 값 글씨는 여기서도 맞춘다 — 회전해 둔 사진을 열면 손잡이만 옮겨 가고
+  // 글씨는 0.0°로 남아 있었다.
+  $('rotValue').textContent = degLabel(+$('rotSlider').value);
+  $('viewPrev').disabled = viewIdx <= 0;
+  $('viewNext').disabled = viewIdx >= state.items.length - 1;
+  $('viewExclude').textContent = it.excluded ? '↩ 넣기' : '✕ 빼기';
+  $('viewExclude').title = it.excluded ? '영상에 다시 넣기' : '영상에서 빼기';
+  const p = prevIncluded(viewIdx);
+  // 첫 사진(앞에 포함된 사진이 없음)에서는 겹쳐 볼 것이 없다.
+  $('onion').disabled = p < 0;
+  if (p < 0) $('onion').checked = false;
+  if (!viewSrc || viewSrc.it !== it) viewSrc = { it, canvas: canvasOf(it.original) };
+  if (p < 0) viewOnionSrc = null;
+  else {
+    const pit = state.items[p];
+    const key = `${p}:${pit.flips || 0}:${pit.rotation || 0}:${pit.name}`;
+    if (!viewOnionSrc || viewOnionSrc.key !== key) viewOnionSrc = { key, canvas: canvasOf(pit.image) };
+  }
+  drawView();
+}
+// 슬라이더를 움직이는 동안 매번 불린다. 사진 데이터를 다시 만들지 않고 캔버스 변환만
+// 쓰므로 바로바로 따라온다 (회전 설계 §2).
+function drawView() {
+  const it = state.items[viewIdx];
+  if (!it || !viewSrc) return;
+  const c = $('viewCanvas'), w = it.original.width, h = it.original.height;
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d');
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+  const deg = +$('rotSlider').value;
+  const onion = $('onion').checked && viewOnionSrc;
+  // 겹쳐 보기: 앞 사진을 아래에 깔고 지금 사진을 반투명으로 얹는다. 앞 사진 쪽을
+  // 0.5로 그리면 검은 바탕과 섞여 둘 다 어두워지므로, 아래는 그대로 두고 위만 반투명
+  // 으로 그려 정확히 반반으로 섞이게 한다.
+  if (onion) ctx.drawImage(viewOnionSrc.canvas, 0, 0, w, h);
+  if (onion) ctx.globalAlpha = 0.5;
+  drawOriented(ctx, viewSrc.canvas, w, h, deg, !!it.flipped);
+  ctx.globalAlpha = 1;
+}
+
 // state.status(정합 성공/실패 표시)는 chainTransforms가 채운 배열이라 items/flags와
 // 길이·순서가 항상 같아야 한다. 어긋나면(예: 아직 한 번도 만들기를 안 돌렸거나, 다른
 // 조작으로 길이가 안 맞으면) 통째로 비워서 엉뚱한 사진에 회색 "구도 실패" 표시가
@@ -366,6 +475,8 @@ function invalidateCheck() {
 function move(i, d) { moveTo(i, i + d); }
 function moveTo(from, to) {
   if (locked()) return;
+  // 순서가 바뀌면 뷰어가 보던 자리(viewIdx)가 다른 사진을 가리키게 된다. 먼저 나온다.
+  closeViewer();
   if (to < 0 || to >= state.items.length || from === to) return;
   if (state.status.length === state.items.length) { const [st] = state.status.splice(from, 1); state.status.splice(to, 0, st); }
   else state.status = [];
@@ -400,7 +511,7 @@ function toggleExclude(i) {
 
 async function addFiles(files) {
   if (locked()) { toast('영상을 만드는 중에는 사진을 넣을 수 없습니다. 취소 후 넣어 주세요.'); return; }
-  state.loading = true; leaveDone(); render();
+  closeViewer(); state.loading = true; leaveDone(); render();
   let grays = null;
   try {
     const arr = [...files];
@@ -475,6 +586,7 @@ async function checkAngles() {
   if (state.busy || state.loading) return;
   const active = activeItems();
   if (active.length < MIN_CHECK) { toast(`영상에 넣는 사진이 ${MIN_CHECK}장 이상일 때 검사할 수 있습니다.`); return; }
+  closeViewer();                     // 크게 보기에서 조절하던 회전을 먼저 적용하고 시작한다
   state.busy = true; state.cancelled = false; state.job = 'check'; phases = PHASE_CHECK;
   // 앞선 검사 결과는 먼저 지운다 — 도중에 취소하면 낡은 배지가 남아 있으면 안 된다.
   state.angle = null; setCheckNote('');
@@ -532,6 +644,7 @@ async function make() {
   // 제외한 사진은 영상에 들어가지 않는다. 남은 사진이 2장 미만이면 이어 붙일 구간이 없다.
   const active = activeItems();
   if (active.length < 2) { toast('영상에 넣는 사진이 2장 이상이어야 합니다.'); return; }
+  closeViewer();                     // 크게 보기에서 조절하던 회전을 먼저 적용하고 시작한다
   state.busy = true; state.cancelled = false; state.job = 'make'; phases = PHASE_MAKE;
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
   jobPct = 0; $('eta').textContent = '';
@@ -667,6 +780,7 @@ function save() {
 function remake() { $('video').pause(); uiState = 'ready'; progress(''); render(); }
 function clearAll() {
   if (locked()) return;
+  discardViewer();                   // 사진이 사라지므로 조절 중이던 값은 버린다
   state.items = []; state.flags = []; state.status = [];
   // 사진이 하나도 없으니 "다시 검사하세요"가 아니라 결과 줄까지 통째로 비운다.
   invalidateCheck(); setCheckNote('');
@@ -739,6 +853,16 @@ $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('emptySheet').onclick = () => { if (!locked()) $('file').click(); };
 $('emptySheet').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!locked()) $('file').click(); } });
 $('bFs').onclick = toggleFs;
+// ── 크게 보기 버튼·슬라이더 ───────────────────────────────────
+$('viewClose').onclick = () => { closeViewer(); render(); };
+$('viewPrev').onclick = () => stepViewer(-1);
+$('viewNext').onclick = () => stepViewer(1);
+$('viewFlip').onclick = () => { if (uiState === 'view') flip(viewIdx); };
+$('viewExclude').onclick = () => { if (uiState === 'view') toggleExclude(viewIdx); };
+// 슬라이더는 사진 데이터를 건드리지 않고 캔버스만 다시 그린다 — 끌면 바로 따라온다.
+$('rotSlider').oninput = () => { $('rotValue').textContent = degLabel(+$('rotSlider').value); drawView(); };
+$('rotZero').onclick = () => { $('rotSlider').value = '0'; $('rotValue').textContent = degLabel(0); drawView(); };
+$('onion').onchange = () => { if (uiState === 'view') syncViewer(); };
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
 $('labelMode').onchange = syncSettings;
 const brandHome = $('brandHome');
@@ -746,8 +870,15 @@ brandHome.addEventListener('click', () => { location.href = '/'; });
 brandHome.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.href = '/'; } });
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Esc는 슬라이더에 커서가 가 있어도 들어야 한다 — 크게 보기에서 빠져나오는 길이다.
+  if (uiState === 'view' && e.key === 'Escape') { e.preventDefault(); closeViewer(); render(); return; }
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+  // ←/→는 입력칸에 커서가 없을 때만 앞뒤 사진으로 간다 (회전 설계 §2). 슬라이더를
+  // 잡고 있을 때는 화살표가 각도를 0.5도씩 움직이는 편이 자연스럽다.
+  if (uiState === 'view' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault(); stepViewer(e.key === 'ArrowLeft' ? -1 : 1); return;
+  }
   if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFs(); }
 });
 
