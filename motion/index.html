@@ -115,19 +115,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .badge.excluded{color:#b9c5d1;border-color:#7d8d9d}
 /* 크게 보기에서 손으로 맞춘 사진: 청록 작은 배지 (수동 맞춤 설계 §3) */
 .badge.adjust{color:var(--accent);border-color:var(--accent)}
-/* 뺀 사진은 그 자리에 그대로 두되 어둡고 회색으로 — ↩로 언제든 되돌릴 수 있다
-   (수동 맞춤 설계 §3). 배지·버튼까지 흐려지면 ↩를 찾기 어려워, 사진에만 건다. */
+/* 뺀 사진은 그 자리에 그대로 두되 색은 남기고 어둡게만 — ↩로 언제든 되돌릴 수 있다.
+   흑백으로 하면 구도 실패(.fail, 흑백)와 헷갈리고, 글씨 도장은 흉해서 밝기만 낮춘다
+   (원장 소감 09-22). 배지·버튼까지 흐려지면 ↩를 찾기 어려워, 사진에만 건다. */
 /* 구도 실패(.fail img)의 회색조 규칙이 뒤에 오므로, 둘 다인 사진에서도 어둡게가
    살아남도록 아이디를 앞에 붙여 힘을 더 준다. */
-#grid .card.excluded img,#assetList .asset.excluded img{filter:brightness(.35) grayscale(1)}
-/* 그 위에 기울어진 "제외" 도장을 찍어 멀리서도 한눈에 구분되게 한다 */
-.stamp{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-15deg);
-  padding:2px 16px;border:4px solid rgba(255,255,255,.5);border-radius:10px;
-  color:rgba(255,255,255,.62);font-size:42px;font-weight:800;letter-spacing:.1em;
-  white-space:nowrap;pointer-events:none;
-}
-.asset .stamp{padding:1px 8px;border-width:2px;border-radius:6px;font-size:19px}
+#grid .card.excluded img,#assetList .asset.excluded img{filter:brightness(.45)}
 .card .btns{position:absolute;right:7px;top:7px;display:flex;gap:3px}
 .card .btns button{
   width:26px;height:26px;display:grid;place-items:center;font-size:12px;color:#e8eef4;
@@ -167,6 +160,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .view-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000;border-radius:8px}
 #viewCanvas{max-width:100%;max-height:100%;display:block;touch-action:none}
 /* 맞춤 모드에서는 사진을 끌어 옮길 수 있다는 손 모양으로 바꾼다 */
+/* 크게 보기에서도 뺀 사진은 격자와 같은 밝기로 어둡게 (원장 소감 09-22) */
+#viewCanvas.excluded{filter:brightness(.45)}
 #viewCanvas.adjust{cursor:grab}
 #viewCanvas.adjust.drag{cursor:grabbing}
 #viewCanvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
