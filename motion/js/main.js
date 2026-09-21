@@ -1,4 +1,4 @@
-import { loadFiles, monthsLabel } from './load.js';
+import { loadFiles, monthsLabel, dateLabel, baseName } from './load.js';
 import { toGray } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize } from './align.js';
@@ -9,9 +9,6 @@ import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false };
-// "경과 글씨" 체크박스에서 사용자가 마지막으로 고른 값. 날짜 없는 사진이 섞이면
-// 체크박스를 끄고 잠그는데, 그 사진을 빼고 나면 원래 값으로 되돌려 줘야 한다.
-let labelPref = true;
 const MAX = 40;
 // RIFE 세션(21.6MB 모델 + GPU 버퍼)은 만들기를 누를 때마다 새로 올리면 그만큼씩 쌓인다.
 // 한 번 만든 세션을 계속 돌려 쓰고, 추론이 고장난 경우에만 버린다.
@@ -46,17 +43,24 @@ function locked() { return state.busy || state.loading; }
 // empty: 사진 없음 / ready: 만들 수 있음 / busy: 만드는 중 / done: 영상 완성
 function setState(s) {
   uiState = s;
-  const p = $('primaryBtn');
-  p.classList.remove('pulse');
-  if (s === 'done') {
-    p.textContent = 'MP4 저장'; p.disabled = false;
-    void p.offsetWidth;                       // 같은 상태로 다시 들어와도 애니메이션이 돌도록
-    p.classList.add('pulse');
-  } else if (s === 'busy') {
-    p.textContent = `만드는 중 ${jobPct}%`; p.disabled = true;
+  // 만들기 버튼은 조절판 안에 있고 저장 버튼은 따로 있다(v3 설계 §2). 만들기가
+  // 저장으로 바뀌지 않으므로, 완성된 뒤에도 사진을 손보고 바로 다시 만들 수 있다.
+  const mk = $('makeBtn');
+  if (s === 'busy') {
+    mk.textContent = `만드는 중 ${jobPct}%`; mk.disabled = true;
   } else {
-    p.textContent = '영상 만들기';
-    p.disabled = state.items.length < 2 || locked();
+    mk.textContent = '영상 만들기';
+    mk.disabled = state.items.length < 2 || locked();
+  }
+  // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
+  const saves = [$('saveBtn'), $('saveBtn2')];
+  const hasResult = !!(lastUrl && lastName);
+  for (const b of saves) { b.classList.remove('pulse'); b.disabled = !hasResult; }
+  if (s === 'done' && hasResult) {
+    for (const b of saves) {
+      void b.offsetWidth;                     // 같은 상태로 다시 들어와도 애니메이션이 돌도록
+      b.classList.add('pulse');
+    }
   }
   $('emptySheet').style.display = s === 'empty' ? '' : 'none';
   $('grid').style.display = s === 'done' ? 'none' : '';
@@ -76,9 +80,13 @@ function syncSettings() {
   const lock = locked();
   $('quality').disabled = gpuLocked || lock;
   $('step').disabled = lock;
-  const noDate = state.items.some(it => !it.date);
-  $('label').disabled = noDate || lock;
-  $('label').checked = noDate ? false : labelPref;
+  $('labelMode').disabled = lock;
+  // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
+  // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
+  const noDate = state.items.reduce((n, it) => n + (it.date ? 0 : 1), 0);
+  const note = $('labelNote');
+  note.textContent = noDate ? `날짜 없는 사진 ${noDate}장은 글씨 없이 갑니다` : '';
+  note.hidden = !noDate || $('labelMode').value === 'none';
 }
 
 // ── 진행 표시 ─────────────────────────────────────────────────
@@ -105,7 +113,7 @@ function progress(stage, i, n) {
     jobPct = 0;
     $('bar').firstElementChild.style.width = n ? `${Math.round(100 * i / n)}%` : '0%';
   }
-  if (uiState === 'busy') $('primaryBtn').textContent = `만드는 중 ${jobPct}%`;
+  if (uiState === 'busy') $('makeBtn').textContent = `만드는 중 ${jobPct}%`;
 }
 // 남은 시간 = (경과 시간 / 처리한 프레임) × 남은 프레임, 10초마다 갱신 (설계 §3)
 let runStart = 0, etaAt = 0;
@@ -131,7 +139,9 @@ function thumbOf(it) {
   }
   return it.thumb;
 }
-function fmtDate(d) { return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; }
+// 격자 카드와 사진 줄이 같은 형식을 쓴다: `번호 · 2023-02-20` (v3 설계 §4).
+// 날짜가 없는 사진은 파일 이름 앞토막으로 대신한다.
+function captionOf(it, i) { return `${i + 1} · ${it.date ? dateLabel(it.date) : baseName(it.name)}`; }
 function badgesFor(i) {
   const out = [], f = state.flags[i];
   if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음']);
@@ -173,7 +183,7 @@ function renderGrid() {
     d.title = it.name;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
     const no = document.createElement('div'); no.className = 'num';
-    no.textContent = `${i + 1}. ` + (it.date ? fmtDate(it.date) : it.name);
+    no.textContent = captionOf(it, i);
     d.appendChild(no);
     const bl = badgesFor(i);
     if (bl.length) {
@@ -204,7 +214,16 @@ function renderStrip() {
     if (state.status[i] === 'fail') d.classList.add('fail');
     d.title = `${i + 1}. ${it.name}`;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
-    const no = document.createElement('div'); no.className = 'no'; no.textContent = String(i + 1); d.appendChild(no);
+    const no = document.createElement('div'); no.className = 'no'; no.textContent = captionOf(it, i); d.appendChild(no);
+    const bl = badgesFor(i);
+    if (bl.length) {
+      const tags = document.createElement('div'); tags.className = 'tags';
+      bl.forEach(([cls, text], k) => {
+        const sp = document.createElement('span'); sp.className = cls; sp.textContent = (k ? ' · ' : '') + text;
+        tags.appendChild(sp);
+      });
+      d.appendChild(tags);
+    }
     d.appendChild(btnRow(i, lock, [
       ['⇄', '좌우 뒤집기', () => flip(i)],
       ['✕', '빼기', () => remove(i)],
@@ -332,8 +351,14 @@ async function make() {
     const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch; const ctx = canvas.getContext('2d');
     const Mp4Muxer = await import('../../vendor/mp4-muxer.mjs');
     enc = await Mp4Encoder.create(Mp4Muxer, cw, ch, fps);
-    const useLabel = $('label').checked && state.items.every(it => it.date);
-    const labels = state.items.map(it => useLabel ? monthsLabel(state.items[0].date, it.date) : '');
+    // 글씨는 처음 고른 대로 한 벌만 만든다(미리보기 = 저장 파일). 날짜가 없는 사진은
+    // 어느 쪽을 골랐든 그 구간만 글씨 없이 간다 (v3 설계 §1).
+    const labelMode = $('labelMode').value;
+    const firstDated = state.items.find(it => it.date);
+    const labels = state.items.map(it => {
+      if (labelMode === 'none' || !it.date || !firstDated) return '';
+      return labelMode === 'date' ? dateLabel(it.date) : monthsLabel(firstDated.date, it.date);
+    });
     // CHW(float32 3채널) 한 장은 1152×768 기준 약 10.6MB다. 40장을 한꺼번에 만들면
     // 그것만 425MB이고 원본·정렬본까지 같이 살아 있어 진료실 PC가 버티지 못한다.
     // 필요한 순간에 만들고(i, i+1 두 장만 살려 둔다) 쓴 것은 바로 버린다.
@@ -429,10 +454,26 @@ function clearAll() {
 }
 
 // ── 전체 화면 ─────────────────────────────────────────────────
-function toggleFs() {
-  if (document.fullscreenElement) document.exitFullscreen();
-  else document.documentElement.requestFullscreen().catch(() => toast('전체화면을 사용할 수 없습니다'));
+// 페이지 전체를 띄우면 위쪽 막대·조절판·사진 줄까지 같이 커져서 정작 보고 싶은
+// 것이 작게 남는다. 영상이 있으면 영상만, 없으면 사진 격자만 띄운다 (v3 설계 §3).
+function fsTarget() {
+  const v = $('video');
+  return (uiState === 'done' && v.getAttribute('src')) ? v : $('stage');
 }
+function toggleFs() {
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  const el = fsTarget();
+  if (!el.requestFullscreen) { toast('전체화면을 사용할 수 없습니다'); return; }
+  const p = el.requestFullscreen();
+  if (p && p.catch) p.catch(() => toast('전체화면을 사용할 수 없습니다'));
+}
+// Esc로 빠져나와도 버튼 글씨가 맞아야 해서 이벤트로 맞춘다.
+function syncFsLabel() {
+  const on = !!document.fullscreenElement;
+  $('bFs').textContent = on ? '전체화면 해제' : '전체화면';
+  $('bFs').title = on ? '전체화면 해제 (F)' : '전체화면 (F)';
+}
+document.addEventListener('fullscreenchange', syncFsLabel);
 
 // ── 화면 어디에 떨어뜨려도 사진 추가 ───────────────────────────
 // 사진 줄이나 격자 밖(조절판·여백·배경)에 떨어뜨리면 브라우저 기본 동작으로 그 파일
@@ -459,7 +500,8 @@ window.addEventListener('drop', e => {
 });
 
 // ── 연결 ─────────────────────────────────────────────────────
-$('primaryBtn').onclick = () => { if (uiState === 'done') save(); else make(); };
+$('makeBtn').onclick = make;
+$('saveBtn').onclick = save;
 $('saveBtn2').onclick = save;
 $('remakeBtn').onclick = remake;
 $('clearBtn').onclick = clearAll;
@@ -470,7 +512,7 @@ $('emptySheet').onclick = () => { if (!locked()) $('file').click(); };
 $('emptySheet').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!locked()) $('file').click(); } });
 $('bFs').onclick = toggleFs;
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
-$('label').onchange = () => { if (!$('label').disabled) labelPref = $('label').checked; };
+$('labelMode').onchange = syncSettings;
 const brandHome = $('brandHome');
 brandHome.addEventListener('click', () => { location.href = '/'; });
 brandHome.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.href = '/'; } });
@@ -491,4 +533,5 @@ if (typeof navigator === 'undefined' || !navigator.gpu) {
   $('gpunote').hidden = false;
 }
 
+syncFsLabel();
 render();
