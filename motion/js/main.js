@@ -123,6 +123,7 @@ function syncSettings() {
   const lock = locked();
   $('quality').disabled = gpuLocked || lock;
   $('step').disabled = lock;
+  $('vshift').disabled = lock;
   $('labelMode').disabled = lock;
   $('title').disabled = lock;
   $('sortBtn').disabled = lock || state.items.length < 2;
@@ -215,7 +216,11 @@ function isAdjusted(it) {
 }
 function resetAdjust(it) { it.adjust = newAdjust(); }
 // 최종 변환 = 자동 구도 맞추기(T) 뒤에 손 보정. 영상·각도 검사·맞춤 화면이 모두 이것을 쓴다.
-function finalT(it, T) { return compose(adjustMatrix(it.adjust, it.image.width, it.image.height), T); }
+// 위아래 위치(09-23): 설정 슬라이더 값(%)만큼 사진 전체를 같은 양으로 옮겨, 구도 차이로
+// 생기는 잘림을 위/아래 중 어느 쪽이 받을지 케이스마다 정한다. 양수 = 아래로. 모든 사진에
+// 똑같이 걸리므로 구도 캐시·겹침 점수는 그대로 유효하다.
+function vshiftM(H) { const v = (+$('vshift').value || 0) / 100; return new Float64Array([1, 0, 0, 0, 1, v * H]); }
+function finalT(it, T) { return compose(vshiftM(it.image.height), compose(adjustMatrix(it.adjust, it.image.width, it.image.height), T)); }
 
 // ── 사진 그리기 (격자와 사진 줄은 같은 state.items에서 그린다) ──
 // 작은 그림은 만들 때마다 1280px 원본을 JPEG로 다시 짜내야 해서 40장이면 화살표 한
@@ -1331,6 +1336,11 @@ window.addEventListener('resize', () => { if (uiState === 'view') drawView(); })
   });
 }
 $('step').oninput = () => { $('stepv').textContent = `${$('step').value}초`; };
+$('vshift').oninput = () => {
+  const v = +$('vshift').value;
+  $('vshiftv').textContent = v === 0 ? '가운데' : v < 0 ? `위로 ${-v}%` : `아래로 ${v}%`;
+  if (uiState === 'view') drawView();   // 점선 틀 안에서 사진이 움직이는 게 바로 보인다
+};
 $('labelMode').onchange = syncSettings;
 const brandHome = $('brandHome');
 brandHome.addEventListener('click', () => { location.href = '/'; });
