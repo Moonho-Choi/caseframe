@@ -16,14 +16,6 @@ export function sortItems(items) {
   });
 }
 
-// 이미 놓인 사진들(list) 사이에서 새 사진(it)이 날짜순으로 들어갈 자리. 기존 순서는 건드리지
-// 않고, 날짜가 더 늦은 첫 사진 앞(날짜 없는 사진은 맨 뒤 취급) — 없으면 맨 뒤.
-export function insertIndex(list, it) {
-  if (!it.date) return list.length;
-  const k = list.findIndex(x => !x.date || x.date > it.date);
-  return k < 0 ? list.length : k;
-}
-
 export function monthsLabel(d0, d) {
   let months = (d.getFullYear() - d0.getFullYear()) * 12 + (d.getMonth() - d0.getMonth());
   if (d.getDate() < d0.getDate()) months -= 1;

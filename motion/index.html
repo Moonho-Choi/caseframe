@@ -128,14 +128,29 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 }
 .card .btns button:hover{background:rgba(0,0,0,.85);border-color:var(--accent);color:var(--accent)}
 .card.fail img{filter:grayscale(1)}
-/* 끌어서 순서 바꾸기 표시: 끌리는 사진은 반투명, 놓일 자리 가장자리에 청록 선 */
+/* 끌어서 순서 바꾸기: 끌리는 사진은 반투명, 놓일 자리에는 점선 빈 칸이 벌어진다 */
 .card.dragging,.asset.dragging{opacity:.35}
-.card.drop-before::after,.card.drop-after::after,.asset.drop-before::after,.asset.drop-after::after{
-  content:'';position:absolute;top:4px;bottom:4px;width:4px;border-radius:2px;background:var(--accent);
-  box-shadow:0 0 6px var(--accent);pointer-events:none;z-index:3;
+.card.ph,.asset.ph{border:2px dashed var(--accent);background:rgba(65,214,192,.08);pointer-events:none}
+/* 뺀 사진의 밝기는 서서히 바뀐다. from-bright/from-dark는 다시 그린 직후 한 프레임 동안 이전 밝기 */
+.card img,.asset img,#viewCanvas{transition:filter .5s ease}
+#grid .card.excluded.from-bright img,#assetList .asset.excluded.from-bright img{filter:none}
+#grid .card.from-dark img,#assetList .asset.from-dark img{filter:brightness(.45)}
+/* 뺀 사진 한가운데 되돌리기 버튼 */
+.card .restore{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
+  padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;
+  color:var(--accent);background:rgba(0,0,0,.72);border:1px solid var(--accent);cursor:pointer;
 }
-.card.drop-before::after,.asset.drop-before::after{left:0}
-.card.drop-after::after,.asset.drop-after::after{right:0}
+.card .restore:hover{background:rgba(0,0,0,.9);box-shadow:0 0 10px rgba(65,214,192,.5)}
+.view-stage{position:relative}
+.btn.restore-big{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
+  padding:12px 24px;font-size:16px;font-weight:700;border-radius:999px;
+  color:var(--accent);background:rgba(0,0,0,.72);border:1px solid var(--accent);
+}
+.btn.restore-big[hidden]{display:none}
+.film-btns{display:flex;gap:6px;flex-wrap:wrap}
+.btn.sort{border-color:rgba(65,214,192,.5);color:var(--accent)}
 
 /* 사진이 없을 때 가운데 안내판 */
 .sheet-empty{
@@ -350,7 +365,7 @@ body.drag #drop{display:block}
     </div>
     <div id="viewer" hidden>
       <div class="view-cap"><span id="viewCap"></span><span id="viewZoom"></span></div>
-      <div class="view-stage" id="viewStage"><canvas id="viewCanvas" tabindex="0"></canvas></div>
+      <div class="view-stage" id="viewStage"><canvas id="viewCanvas" tabindex="0"></canvas><button class="btn restore-big" id="viewRestore" type="button" hidden title="영상에 다시 넣기">↩ 다시 넣기</button></div>
       <div class="view-need" id="viewNeedCheck" hidden>
         <span id="viewNeedText">먼저 각도 검사를 하면 앞뒤 사진과 맞출 수 있습니다</span>
         <button class="btn check-sm" id="viewRunCheck">각도 검사</button>
@@ -433,7 +448,7 @@ body.drag #drop{display:block}
             <option value="none">없음</option>
           </select>
         </label>
-        <div class="caption-hint">제목은 오른쪽 위, 날짜는 왼쪽 위에 새겨집니다. 만든 뒤에 바꾸면 "다시 만들기"가 필요합니다.</div>
+        <div class="caption-hint">제목은 왼쪽 위, 날짜는 오른쪽 위에 새겨집니다. 만든 뒤에 바꾸면 "다시 만들기"가 필요합니다.</div>
         <span id="labelNote" hidden></span>
       </div>
     </div>
@@ -460,8 +475,11 @@ body.drag #drop{display:block}
 <section class="filmstrip">
   <div class="film-info">
     <h2>가져온 사진</h2>
-    <p>파일 이름의 날짜 순으로 정렬됩니다. 끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 영상에서 뺍니다(↩로 다시 넣기). 번호는 처음 넣을 때 정해져 바뀌지 않습니다.</p>
-    <button class="btn" id="bOpen">폴더에서 선택</button>
+    <p>끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 영상에서 뺍니다(↩로 다시 넣기). "날짜순 정렬"은 전체를 파일 이름의 날짜 순으로 다시 세우고 번호를 1부터 매깁니다.</p>
+    <div class="film-btns">
+      <button class="btn" id="bOpen">폴더에서 선택</button>
+      <button class="btn sort" id="sortBtn" disabled title="파일 이름의 날짜 순으로 다시 정렬하고 번호를 1부터 매깁니다">날짜순 정렬</button>
+    </div>
     <input id="file" type="file" accept="image/*" multiple hidden>
   </div>
   <div class="asset-list" id="assetList">

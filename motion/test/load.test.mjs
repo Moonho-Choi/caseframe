@@ -1,23 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDate, sortItems, monthsLabel, dateLabel, baseName, sortFiles, insertIndex } from '../js/load.js';
+import { parseDate, sortItems, monthsLabel, dateLabel, baseName, sortFiles } from '../js/load.js';
 
 test('parseDate finds YYYYMMDD', () => {
   assert.deepEqual(parseDate('임희진_20230724_143958.jpg'), new Date(2023, 6, 24));
   assert.equal(parseDate('photo.jpg'), null);
   assert.equal(parseDate('x_20231301.jpg'), null);
 });
-test('insertIndex: 날짜 자리로 끼워 넣고, 날짜 없으면 맨 뒤', () => {
-  const D = (y, m) => new Date(y, m - 1, 1);
-  const list = [{ date: D(2023, 1) }, { date: D(2023, 3) }, { date: D(2023, 6) }, { date: null }];
-  assert.equal(insertIndex(list, { date: D(2023, 2) }), 1);
-  assert.equal(insertIndex(list, { date: D(2022, 12) }), 0);
-  assert.equal(insertIndex(list, { date: D(2023, 3) }), 2);   // 같은 날짜는 그 뒤
-  assert.equal(insertIndex(list, { date: D(2024, 1) }), 3);   // 날짜 없는 사진보다는 앞
-  assert.equal(insertIndex(list, { date: null }), 4);
-  assert.equal(insertIndex([], { date: D(2023, 1) }), 0);
-});
-
 test('sortItems by date then name', () => {
   const s = sortItems([{ name: 'b', date: null }, { name: 'a_20230101.jpg', date: new Date(2023, 0, 1) }, { name: 'a_20220101.jpg', date: new Date(2022, 0, 1) }, { name: 'a', date: null }]);
   assert.deepEqual(s.map(i => i.name), ['a_20220101.jpg', 'a_20230101.jpg', 'a', 'b']);

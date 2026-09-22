@@ -1,4 +1,4 @@
-import { loadFiles, insertIndex, monthsLabel, dateLabel, baseName } from './load.js';
+import { loadFiles, sortItems, monthsLabel, dateLabel, baseName } from './load.js';
 import { toGray, compose } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores } from './align.js';
@@ -121,6 +121,7 @@ function syncSettings() {
   $('step').disabled = lock;
   $('labelMode').disabled = lock;
   $('title').disabled = lock;
+  $('sortBtn').disabled = lock || state.items.length < 2;
   // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
   // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
   const noDate = state.items.reduce((n, it) => n + (it.date || it.excluded ? 0 : 1), 0);
@@ -248,7 +249,9 @@ function badgesFor(i) {
 // dragover 중에는 dataTransfer를 읽을 수 없어(크롬 보호) 끌기 시작 번호를 dragFrom에 둔다.
 let dragFrom = -1;
 function clearDropMarks() {
-  document.querySelectorAll('.drop-before,.drop-after,.dragging').forEach(el => el.classList.remove('drop-before', 'drop-after', 'dragging'));
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  if (dropPh) { dropPh.remove(); dropPh = null; }
+  document.querySelectorAll('#grid .card,#assetList .asset').forEach(el => { el.style.transform = ''; el.style.transition = ''; });
 }
 // 마우스가 사진의 왼쪽 반이면 그 앞, 오른쪽 반이면 그 뒤에 놓는다.
 function sideOf(el, x) { const r = el.getBoundingClientRect(); return x < r.left + r.width / 2; }
@@ -260,7 +263,7 @@ function dropTarget(from, j, before) {
 // 사진 사이 틈이나 빈 자리에 놓았을 때: 마우스에서 가장 가까운 사진을 고른다.
 function nearestCard(container, sel, x, y) {
   let best = null, bd = Infinity;
-  container.querySelectorAll(sel).forEach((el, k) => {
+  realCards(container, sel).forEach((el, k) => {
     const r = el.getBoundingClientRect();
     const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
     const d = dx * dx + dy * dy;
@@ -268,9 +271,45 @@ function nearestCard(container, sel, x, y) {
   });
   return best;
 }
+// 놓일 자리에는 빈 칸(placeholder)을 끼워 넣어 공간이 실제로 벌어진다. 자리가 바뀔 때 주변
+// 사진은 FLIP 방식(이전 위치에서 새 위치로 transform 전환)으로 미끄러진다 (원장 요청 09-23).
+let dropPh = null;
+function realCards(container, sel) { return [...container.querySelectorAll(sel)].filter(el => !el.classList.contains('ph')); }
+function flipMove(container, sel, mutate) {
+  const els = realCards(container, sel);
+  const before = els.map(el => el.getBoundingClientRect());
+  mutate();
+  els.forEach((el, k) => {
+    const a = before[k], b = el.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) return;
+    el.style.transition = 'none'; el.style.transform = `translate(${dx}px,${dy}px)`;
+    requestAnimationFrame(() => { el.style.transition = 'transform .18s ease'; el.style.transform = ''; });
+  });
+}
+function placeDrop(container, sel, el, before) {
+  if (dropPh && dropPh.parentNode === container && (before ? dropPh.nextSibling === el : el.nextSibling === dropPh)) return;
+  const ref = before ? el : el.nextSibling;
+  flipMove(container, sel, () => {
+    if (!dropPh || dropPh.parentNode !== container) {
+      if (dropPh) dropPh.remove();
+      dropPh = document.createElement('div'); dropPh.className = (sel === '.card' ? 'card' : 'asset') + ' ph';
+    }
+    container.insertBefore(dropPh, ref);
+  });
+}
+// 빈 칸 앞에 있는 실제 사진 수 = n+1개 슬롯 기준의 삽입 자리. 없으면 -1.
+function dropSlot(container, sel) {
+  if (!dropPh || dropPh.parentNode !== container) return -1;
+  let n = 0;
+  for (const c of container.children) { if (c === dropPh) return n; if (c.matches(sel) && !c.classList.contains('ph')) n++; }
+  return -1;
+}
+// 슬롯 p를 moveTo의 to로: 끌던 사진(from)을 빼면 그 뒤 슬롯은 하나씩 당겨진다.
+function slotToIndex(from, p) { return p > from ? p - 1 : p; }
 function markDrop(el, before) {
-  document.querySelectorAll('.drop-before,.drop-after').forEach(x => { if (x !== el) x.classList.remove('drop-before', 'drop-after'); });
-  el.classList.toggle('drop-before', before); el.classList.toggle('drop-after', !before);
+  const container = el.closest('#grid') ? $('grid') : $('assetList');
+  placeDrop(container, el.classList.contains('card') ? '.card' : '.asset', el, before);
 }
 // 격자(세로)·사진 줄(가로)의 가장자리 근처로 끌고 가면 저절로 밀린다 — 화면 밖의 자리로도
 // 옮길 수 있게 (원장 소감 09-22: 여러 칸 이동이 안 됨).
@@ -293,15 +332,19 @@ function wireContainerDrop(container, sel) {
   container.addEventListener('dragover', e => {
     if (dragFrom < 0) return;
     e.preventDefault();
-    if (e.target.closest && e.target.closest(sel)) return;   // 사진 위는 사진이 맡는다
+    if (e.target.closest && e.target.closest('.ph')) return;      // 빈 칸 위: 그대로
+    if (e.target.closest && e.target.closest(sel)) return;        // 사진 위는 사진이 맡는다
     const n = nearestCard(container, sel, e.clientX, e.clientY);
     if (!n || n.k === dragFrom) return;
     markDrop(n.el, sideOf(n.el, e.clientX));
   });
   container.addEventListener('drop', e => {
-    if (dragFrom < 0 || (e.target.closest && e.target.closest(sel))) return;
-    e.preventDefault(); e.stopPropagation(); endDrag(); clearDropMarks();
+    if (dragFrom < 0 || (e.target.closest && e.target.closest(sel) && !e.target.closest('.ph'))) return;
+    e.preventDefault(); e.stopPropagation(); endDrag();
     const from = dragFrom; dragFrom = -1;
+    const p = dropSlot(container, sel);
+    clearDropMarks();
+    if (p >= 0) { moveTo(from, slotToIndex(from, p)); return; }
     const n = nearestCard(container, sel, e.clientX, e.clientY);
     if (!n || n.k === from) return;
     moveTo(from, dropTarget(from, n.k, sideOf(n.el, e.clientX)));
@@ -325,12 +368,17 @@ function wireDrag(el, i, lock) {
   // 그게 moveTo(0, i)로 해석되어 사진 1이 슬쩍 옮겨지고 끌어온 파일은 사라졌다.
   // 파일이 실려 있으면 순서 바꾸기가 아니라 "사진 추가"로 보낸다.
   el.ondrop = e => {
-    e.preventDefault(); e.stopPropagation(); endDrag(); clearDropMarks();
-    if (e.dataTransfer.files && e.dataTransfer.files.length) { dragFrom = -1; addFiles(e.dataTransfer.files); return; }
+    e.preventDefault(); e.stopPropagation(); endDrag();
+    if (e.dataTransfer.files && e.dataTransfer.files.length) { dragFrom = -1; clearDropMarks(); addFiles(e.dataTransfer.files); return; }
     // 안에서 끈 사진은 dragFrom이 안다(getData는 브라우저에 따라 비어 올 수 있다).
     const from = dragFrom >= 0 ? dragFrom : +e.dataTransfer.getData('text/plain');
     dragFrom = -1;
-    if (!Number.isInteger(from) || from < 0 || from >= state.items.length || from === i) return;
+    const container = el.closest('#grid') ? $('grid') : $('assetList');
+    const p = dropSlot(container, el.classList.contains('card') ? '.card' : '.asset');
+    clearDropMarks();
+    if (!Number.isInteger(from) || from < 0 || from >= state.items.length) return;
+    if (p >= 0) { moveTo(from, slotToIndex(from, p)); return; }
+    if (from === i) return;
     moveTo(from, dropTarget(from, i, sideOf(el, e.clientX)));
   };
 }
@@ -361,6 +409,13 @@ function renderGrid() {
     // stopPropagation 하므로 여기까지 오지 않는다 (회전 설계 §2).
     d.onclick = () => openViewer(i);
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
+    if (it.excluded) {
+      // 뺀 사진 한가운데 되돌리기 버튼 (원장 요청 09-23). 모서리 ↩와 같은 일을 한다.
+      const rb = document.createElement('button'); rb.className = 'restore'; rb.type = 'button';
+      rb.textContent = '↩ 다시 넣기'; rb.title = '영상에 다시 넣기'; rb.disabled = lock;
+      rb.onclick = ev => { ev.stopPropagation(); toggleExclude(i); };
+      d.appendChild(rb);
+    }
     const no = document.createElement('div'); no.className = 'num';
     no.textContent = captionOf(it);
     d.appendChild(no);
@@ -443,8 +498,8 @@ function nextIncluded(i) {
 // 캐시의 T는 "포함된 사진"만큼이라, 원래 자리(i)로 찾으려면 펼쳐 둔다.
 // 캐시가 없거나 사진 구성이 달라졌으면 null — 그때는 아직 맞출 수 없는 상태다.
 function alignedT() {
-  if (!state.cache || state.cache.key !== cacheKey() || state.cache.T.length !== state.items.length) return null;
-  return state.cache.T;
+  if (!state.cache || state.cache.key !== cacheKey()) return null;
+  return cachedT();
 }
 // 뷰어의 세 가지 상태: 'adjust'(맞춤 모드) / 'excluded'(뺀 사진) / 'need'(구도 준비 안 됨)
 function viewMode() {
@@ -562,6 +617,7 @@ function syncViewer() {
   $('viewCanvas').classList.toggle('adjust', mode === 'adjust');
   // 뺀 사진은 크게 보기에서도 어둡게 — 위 글씨만으로는 한눈에 안 보인다 (원장 소감 09-22).
   $('viewCanvas').classList.toggle('excluded', mode === 'excluded');
+  $('viewRestore').hidden = mode !== 'excluded';
   const adj = adjustOf(it);
   $('adjScale').value = String(adj.scale);
   $('adjRot').value = String(adj.rotation);
@@ -718,7 +774,16 @@ async function runCheckFromViewer() {
 // 제외 여부도 **넣지 않는다**(2026-09-21 개정): 구도는 뺀 사진까지 전부 넣고 한 번 맞춰 두고,
 // 빼기/넣기는 그 결과에서 고르기만 한다. 그래야 뺐다 넣어도 검사를 다시 하지 않고 바로
 // 수동 맞춤·만들기가 되고, 사진을 빼도 전체 구도(잘림)가 흔들리지 않는다.
-function cacheKey() { return state.items.map((it, i) => `${i}:${it.name}:${it.flips || 0}`).join('|'); }
+// 순서도 **넣지 않는다**(2026-09-23 개정): 구도 변환은 사진마다 하나씩(it.T) 붙여 두므로 순서를
+// 바꿔도 그대로 쓴다. 키는 "어떤 사진들(이름·뒤집힘)이 있나"만 본다. 새 사진·뒤집기만 다시 계산.
+function cacheKey() { return state.items.map(it => `${it.name}:${it.flips || 0}`).sort().join('|'); }
+// 지금 순서대로 사진에 붙은 변환·상태를 배열로 꺼낸다(캐시가 유효할 때만).
+function cachedT() { return state.items.map(it => it.T); }
+function cachedStatus() { return state.items.map(it => it.status || 'ok'); }
+function storeAlignment(key, T, status) {
+  state.items.forEach((it, k) => { it.T = T[k]; it.status = status[k]; });
+  state.cache = { key };
+}
 function setCheckNote(t) { $('checkNote').textContent = t; }
 // 겹침 점수만 낡은 경우(수동 맞춤을 고쳤을 때). 구도 맞추기 결과(캐시)는 그대로 둔다.
 function invalidateScores() {
@@ -742,8 +807,25 @@ function moveTo(from, to) {
   else state.status = [];
   const [it] = state.items.splice(from, 1); state.items.splice(to, 0, it);
   const [f] = state.flags.splice(from, 1); state.flags.splice(to, 0, f);
-  invalidateCheck();
+  // 구도(it.T)는 순서와 무관하므로 그대로. 이웃 점수(배지)만 낡는다 → 다시 검사는 몇 초.
+  invalidateScores();
   leaveDone(); render();
+}
+// 날짜순 정렬 버튼: 전체를 날짜순(날짜 없는 사진은 이름순으로 뒤)으로 다시 세우고 번호를 1부터
+// 다시 매긴다. 손으로 옮긴 뒤 되돌리는 용도로도 쓴다 (원장 요청 09-23).
+function sortByDate() {
+  if (locked() || state.items.length < 2) return;
+  const sorted = sortItems(state.items);
+  if (sorted.every((it, k) => it === state.items[k])) { toast('이미 날짜순입니다.'); return; }
+  closeViewer();
+  const idx = sorted.map(it => state.items.indexOf(it));
+  state.flags = idx.map(k => state.flags[k]);
+  state.status = state.status.length === state.items.length ? idx.map(k => state.status[k]) : [];
+  state.items = sorted;
+  state.items.forEach((it, k) => { it.no = k + 1; });
+  invalidateScores();
+  leaveDone(); render();
+  toast('날짜순으로 정렬하고 번호를 1부터 다시 매겼습니다.');
 }
 function flip(i) {
   if (locked()) return;
@@ -766,10 +848,18 @@ function flip(i) {
 // 구도 맞추기 사슬이 달라지므로 이전 결과(구도 실패·각도 배지·캐시)는 모두 무효로 한다.
 function toggleExclude(i) {
   if (locked()) return;
-  state.items[i].excluded = !state.items[i].excluded;
+  const it = state.items[i];
+  it.excluded = !it.excluded;
   // 구도 결과(캐시)·구도 실패 표시·각도 배지는 그대로 둔다. 뺀 사진까지 한 번에 맞춰 두었으므로
   // 다시 넣어도 바로 쓸 수 있고, "이웃과 많이 다름" 표시는 빼는 동안 계속 보여야 한다.
   leaveDone(); render();
+  // 새로 그린 카드가 이전 밝기에서 출발해 서서히 바뀌도록, 한 프레임 동안 이전 상태를 입힌다
+  // (원장 소감 09-23: 확 어두워져 다른 사진으로 바뀐 것처럼 보임). 뷰어 캔버스는 그대로 있어
+  // CSS transition만으로 된다.
+  const cls = it.excluded ? 'from-bright' : 'from-dark';
+  const els = [$('grid').children[i], $('assetList').querySelectorAll('.asset')[i]].filter(Boolean);
+  els.forEach(el => el.classList.add(cls));
+  requestAnimationFrame(() => requestAnimationFrame(() => els.forEach(el => el.classList.remove(cls))));
 }
 
 async function addFiles(files) {
@@ -789,15 +879,12 @@ async function addFiles(files) {
     items.forEach(it => { it.original = it.image; it.flipped = false; it.adjust = newAdjust(); });
     if (skipped.length) toast(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
-    // 새 사진은 뒤에 붙이지 않고 날짜 자리로 끼워 넣는다(기존 순서는 그대로). 그래서 번호는
-    // 넣을 때마다 현재 순서대로 다시 매긴다 — 손으로 옮길 때는 여전히 고정 (원장 소감 09-22,
-    // 고정 번호 설계 §3 개정).
+    // 새 사진은 뒤에 붙인다(그 묶음 안에서는 날짜순). 전체를 날짜순으로 세우는 것은
+    // "날짜순 정렬" 버튼이 맡는다(09-23 원장 결정: 저절로 끼어들지 말 것). 번호는 최댓값+1부터.
     const fresh = new Set(items);
-    for (const it of items) {
-      const pos = insertIndex(state.items, it);
-      state.items.splice(pos, 0, it); state.flags.splice(pos, 0, { warn: null });
-    }
-    state.items.forEach((it, k) => { it.no = k + 1; });
+    const maxNo = state.items.reduce((m, it) => Math.max(m, it.no || 0), 0);
+    items.forEach((it, k) => { it.no = maxNo + 1 + k; });
+    state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
     state.status = [];
     invalidateCheck();
     const active = activeItems();
@@ -870,7 +957,7 @@ async function checkAngles() {
     const key = cacheKey();
     let T, status;
     if (state.cache && state.cache.key === key) {
-      ({ T, status } = state.cache);
+      T = cachedT(); status = cachedStatus();
       progress('구도 맞추는 중', 1, 1);
     } else {
       state.cache = null;
@@ -880,7 +967,7 @@ async function checkAngles() {
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
-      state.cache = { key, T, status };
+      storeAlignment(key, T, status);
     }
     state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
@@ -933,7 +1020,7 @@ async function make() {
     const key = cacheKey();
     let T, status;
     if (state.cache && state.cache.key === key) {
-      ({ T, status } = state.cache);
+      T = cachedT(); status = cachedStatus();
       progress('구도 맞추는 중', 1, 1);      // 막대는 이 단계 몫을 한 번에 채운다
     } else {
       state.cache = null;
@@ -942,7 +1029,7 @@ async function make() {
       ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
       grays.forEach(g => g.delete()); grays = null;
       if (cancelled()) throw new Error('취소');
-      state.cache = { key, T, status };
+      storeAlignment(key, T, status);
     }
     // 기준 틀 사진은 만들 때마다 새로 만든다 — 수동 맞춤이 바뀌어도 늘 지금 값대로 나온다.
     const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
@@ -986,7 +1073,7 @@ async function make() {
     etaReset();
     for (let i = 0; i < n - 1; i++) {
       await transition(chwAt(i), chwAt(i + 1), cw, ch, N, aiLevels, rife, async f => {
-        ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw); drawTitle(ctx, title, cw);
+        ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw, 'right'); drawTitle(ctx, title, cw);
         await enc.addFrame(canvas, idx++);
         progress('중간 그림 그리는 중', idx, total);
         etaUpdate(idx, total);
@@ -998,7 +1085,7 @@ async function make() {
       chwCache.delete(i);
       if (cancelled()) throw new Error('취소');
     }
-    ctx.putImageData(chwToImage(chwAt(n - 1), cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw); drawTitle(ctx, title, cw);
+    ctx.putImageData(chwToImage(chwAt(n - 1), cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw, 'right'); drawTitle(ctx, title, cw);
     for (let k = 0; k < Math.round(fps); k++) await enc.addFrame(canvas, idx++);
     progress('영상 파일 만드는 중');
     const blob = await enc.finish();
@@ -1113,7 +1200,7 @@ window.addEventListener('dragleave', e => {
 // 카드·사진에 떨어진 경우는 그쪽에서 stopPropagation 하므로, 덮개는 캡처 단계에서 내린다.
 window.addEventListener('drop', endDrag, true);
 window.addEventListener('drop', e => {
-  e.preventDefault(); endDrag();
+  e.preventDefault(); endDrag(); clearDropMarks(); dragFrom = -1;
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
 });
 
@@ -1136,6 +1223,8 @@ $('viewPrev').onclick = () => stepViewer(-1);
 $('viewNext').onclick = () => stepViewer(1);
 $('viewFlip').onclick = () => { if (uiState === 'view') flip(viewIdx); };
 $('viewExclude').onclick = () => { if (uiState === 'view') toggleExclude(viewIdx); };
+$('viewRestore').onclick = () => { if (uiState === 'view') toggleExclude(viewIdx); };
+$('sortBtn').onclick = sortByDate;
 $('viewRunCheck').onclick = runCheckFromViewer;
 // 슬라이더는 사진 데이터를 건드리지 않고 캔버스만 다시 그린다 — 끌면 바로 따라온다.
 $('adjScale').oninput = () => setAdjustScale(+$('adjScale').value);

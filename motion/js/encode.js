@@ -25,7 +25,7 @@ export function outputName(firstName, ext, quality = null, date = null, title = 
   return `${result}.${ext}`;
 }
 export function labelMetrics(w) { return { band: Math.round(w * 0.055), font: Math.round(w * 0.035), pad: Math.round(w * 0.012) }; }
-// 왼쪽 위 띠(날짜·경과 기간). align='right'면 오른쪽 위 띠(제목).
+// 위쪽 띠 글씨. 제목은 왼쪽 위(drawTitle), 날짜·경과 기간은 오른쪽 위(align='right') — 09-23 원장 요청으로 자리 교체.
 export function drawLabel(ctx, text, w, align = 'left') {
   if (!text) return;
   const { band, font, pad } = labelMetrics(w);
@@ -38,7 +38,7 @@ export function drawLabel(ctx, text, w, align = 'left') {
   ctx.fillText(text, x0 + pad, band / 2, tw);
   ctx.restore();
 }
-export function drawTitle(ctx, text, w) { drawLabel(ctx, text, w, 'right'); }
+export function drawTitle(ctx, text, w) { drawLabel(ctx, text, w, 'left'); }
 // 'mp4'(WebCodecs 있음) 아니면 null. 예전에는 MediaRecorder로 WebM을 만드는 예비
 // 경로가 있었지만, (1) 사파리 16.4+·파이어폭스 130+도 VideoEncoder를 갖고 있어 그
 // 경로가 실제로 고른 적이 없고, (2) MediaRecorder는 실제 시계로 녹화해서 프레임마다
