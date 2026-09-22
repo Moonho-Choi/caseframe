@@ -70,10 +70,10 @@ function setState(s) {
   // 저장으로 바뀌지 않으므로, 완성된 뒤에도 사진을 손보고 바로 다시 만들 수 있다.
   const mk = $('makeBtn'), ck = $('checkBtn'), pk = $('pickBtn');
   if (s === 'busy') {
-    // 각도 검사·부드럽게 고르기도 같은 잠금·진행 틀을 쓰므로, 지금 도는 일 쪽 버튼에만 퍼센트를 적는다.
+    // 각도 검사·튀는 사진 빼기도 같은 잠금·진행 틀을 쓰므로, 지금 도는 일 쪽 버튼에만 퍼센트를 적는다.
     mk.textContent = state.job === 'make' ? `만드는 중 ${jobPct}%` : '영상 만들기';
     ck.textContent = state.job === 'check' ? `검사 중 ${jobPct}%` : '각도 검사';
-    pk.textContent = state.job === 'pick' ? `고르는 중 ${jobPct}%` : '부드럽게 고르기';
+    pk.textContent = state.job === 'pick' ? `고르는 중 ${jobPct}%` : '튀는 사진 빼기';
     mk.disabled = ck.disabled = pk.disabled = true;
   } else {
     // 제외한 사진은 영상에 들어가지 않으므로 버튼을 켤지 말지도 "포함된 장수"로 센다 (제외 설계 §2).
@@ -85,7 +85,7 @@ function setState(s) {
     const fresh = !!state.angle && !!state.cache && state.cache.key === cacheKey();
     ck.textContent = fresh ? '검사 완료' : '각도 검사';
     ck.disabled = on < MIN_CHECK || locked() || fresh;
-    pk.textContent = '부드럽게 고르기';
+    pk.textContent = '튀는 사진 빼기';
     pk.disabled = pickCandidates().length < 3 || locked();
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
@@ -842,7 +842,7 @@ function toggleExclude(i) {
   if (locked()) return;
   const it = state.items[i];
   it.excluded = !it.excluded;
-  it.autoExcluded = false;          // 손으로 정한 것은 '부드럽게 고르기'가 다시 건드리지 않는다
+  it.autoExcluded = false;          // 손으로 정한 것은 '튀는 사진 빼기'가 다시 건드리지 않는다
   // 구도 결과(캐시)·구도 실패 표시·각도 배지는 그대로 둔다. 뺀 사진까지 한 번에 맞춰 두었으므로
   // 다시 넣어도 바로 쓸 수 있고, "이웃과 많이 다름" 표시는 빼는 동안 계속 보여야 한다.
   leaveDone(); render();
@@ -928,7 +928,7 @@ function applyOrientation(res, active, fresh) {
 const median = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 
 // 구도 맞추기 결과를 마련한다: 캐시가 유효하면 그대로, 아니면 전체 사진(뺀 사진 포함)으로
-// 새로 계산해 사진에 붙여 둔다. 각도 검사·부드럽게 고르기·만들기가 함께 쓴다.
+// 새로 계산해 사진에 붙여 둔다. 각도 검사·튀는 사진 빼기·만들기가 함께 쓴다.
 async function ensureAlignment(cv, W, H, cancelled) {
   const key = cacheKey();
   if (state.cache && state.cache.key === key) { progress('구도 맞추는 중', 1, 1); return { T: cachedT(), status: cachedStatus() }; }
@@ -951,7 +951,7 @@ function applyScores(active, scores) {
   return { med, flagged };
 }
 
-// ── 부드럽게 고르기 ─────────────────────────────────────────────
+// ── 튀는 사진 빼기 ─────────────────────────────────────────────
 // 원장 관찰(09-23): 사진을 전부 넣으면 구도가 계속 바뀌어 어수선하고, 구도가 비슷한 사진만
 // 2~3장 간격으로 남기면 부드럽다. 그 고르기를 겹침 점수로 자동화한다 — 앞에서 남긴 사진과
 // 잘 겹치는 사진만 남기고 나머지는 빼 둔다(흐리게 남으므로 ↩로 되돌릴 수 있다).
@@ -997,7 +997,7 @@ async function pickSmoothPhotos() {
     });
     applyScores(keptActive, scores);
     progress('완료');
-    setCheckNote(`부드럽게 고르기: ${cand.length}장 중 ${keptIdx.length}장 남김 (기준 ${thr.toFixed(2)})`);
+    setCheckNote(`튀는 사진 빼기: ${cand.length}장 중 ${keptIdx.length}장 남김 (기준 ${thr.toFixed(2)})`);
     toast(removed
       ? `구도가 크게 어긋나는 사진 ${removed}장을 뺐습니다. 흐린 사진은 ↩로 되돌릴 수 있습니다.`
       : '구도가 크게 어긋나는 사진이 없어 전부 그대로 둡니다.');
