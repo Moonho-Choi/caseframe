@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cvReady } from './_cv.mjs';
 import { makeTexture, warpGray, similarity } from './_synth.mjs';
-import { chainTransforms, eccRefine, toSimilarity, medianFrame, alignedSize, cropRect, adjustMatrix, warpImage, neighborScores } from '../js/align.js';
+import { chainTransforms, eccRefine, toSimilarity, medianFrame, alignedSize, cropRect, adjustMatrix, warpImage, neighborScores, TOP_SHIFT_MAX } from '../js/align.js';
 import { apply, invert, compose } from '../js/features.js';
 
 test('chainTransforms brings 4 warped copies back onto one frame', async () => {
@@ -22,39 +22,36 @@ test('chainTransforms brings 4 warped copies back onto one frame', async () => {
 // 있던 사진은 위로 밀려 올라가 원래 윗변이 캔버스 밖(y<0)으로 나가버린다 → 앞니 끝이
 // 잘린다. chainTransforms는 재기준 뒤 모든 사진의 윗변이 캔버스 안에 들어오도록
 // 전체를 최대 4%(H)까지 아래로 미는 안전 이동을 해야 한다.
-test('chainTransforms shifts the whole set down when a photo would lose its top edge', async () => {
+test('chainTransforms shifts the whole set down (up to TOP_SHIFT_MAX) when a photo would lose its top edge', async () => {
   const cv = await cvReady();
   const W = 640, H = 480; const base = makeTexture(cv, W, H, 33);
-  // 케이스 1: 15px 오프셋 (H=480의 4% 안전 이동 한도 19.2px보다 작음)
-  // 가운데(1번) 사진만 원본 콘텐츠가 자기 프레임 안에서 15px 아래로 치우쳐 있다
-  // (치열궁이 낮게 찍힌 사진 흉내, 안전 이동만으로 완전히 회복되는 경우를 확인한다).
-  // 재기준하면 이 사진은 위로 15px 밀려 올라가서 원래 윗변(y=0)이 캔버스 밖(y<0)으로
-  // 나가버리는 상황이 재현돼야 한다.
+  const cap = TOP_SHIFT_MAX * H;                       // 2026-09-23부터 0 — 밀지 않는다
+  // 케이스 1: 15px 오프셋. 가운데(1번) 사진만 원본 콘텐츠가 자기 프레임 안에서 15px 아래로
+  // 치우쳐 있다(치열궁이 낮게 찍힌 사진 흉내). 재기준하면 이 사진은 위로 15px 밀려 올라가
+  // 윗변(y=0)이 캔버스 밖으로 나간다. 한도(cap)만큼만 되돌려진다.
   const Ms1 = [similarity(1, 0, 0, 0), similarity(1, 0, 0, 15), similarity(1, 0, 0, 0)];
   const grays1 = Ms1.map(M => warpGray(cv, base, M));
   const { T: T1, status: status1 } = await chainTransforms(cv, grays1, W, H);
   assert.deepEqual(status1, ['ok', 'ok', 'ok']);
-  for (let i = 0; i < T1.length; i++) {
-    const top = apply(T1[i], W / 2, 0)[1];
-    assert.ok(top >= -0.5, `케이스1 사진 ${i}의 윗변이 캔버스 밖(${top})`);
+  {
+    const top = apply(T1[1], W / 2, 0)[1];
+    const want = -Math.max(0, 15 - cap);
+    assert.ok(Math.abs(top - want) < 3, `케이스1 사진 1의 윗변 ${top} ≠ 예상 ${want}`);
   }
   // 안전 이동은 전체를 똑같이 밀 뿐, 사진끼리 맞춰놓은 상대 위치는 그대로여야 한다
   const pts1 = Ms1.map((M, i) => { const [x, y] = apply(M, 320, 240); return apply(T1[i], x, y); });
   for (const p of pts1) assert.ok(Math.hypot(p[0] - pts1[0][0], p[1] - pts1[0][1]) < 4, `spread ${p}`);
   grays1.forEach(g => g.delete());
 
-  // 케이스 2: 40px 오프셋 (4% 캡 19.2px을 초과하므로 잔여 예상)
-  // 40 - 19.2 = 20.8px 잔여, 상단 엣지 ≈ -20.8 → -23~-18 범위
+  // 케이스 2: 40px 오프셋 — 한도를 넘는 만큼은 그대로 밖에 남는다.
   const Ms2 = [similarity(1, 0, 0, 0), similarity(1, 0, 0, 40), similarity(1, 0, 0, 0)];
   const grays2 = Ms2.map(M => warpGray(cv, base, M));
   const { T: T2, status: status2 } = await chainTransforms(cv, grays2, W, H);
   assert.deepEqual(status2, ['ok', 'ok', 'ok']);
-  for (let i = 0; i < T2.length; i++) {
-    const top = apply(T2[i], W / 2, 0)[1];
-    if (i === 1) {
-      // 오프셋 40 - 캡 19.2 = 잔여 20.8
-      assert.ok(top >= -23 && top <= -18, `케이스2 사진 ${i}의 윗변 잔여가 예상 범위(${top})`);
-    }
+  {
+    const top = apply(T2[1], W / 2, 0)[1];
+    const want = -Math.max(0, 40 - cap);
+    assert.ok(Math.abs(top - want) < 3, `케이스2 사진 1의 윗변 ${top} ≠ 예상 ${want}`);
   }
   grays2.forEach(g => g.delete()); base.delete();
 });
@@ -98,8 +95,8 @@ test('medianFrame of identical transforms is identity-like', () => {
   for (let j = 0; j < 6; j++) assert.ok(Math.abs(R[j] - T[0][j]) < 1e-6);
 });
 
-test('alignedSize is a multiple of 16 and about 90% of frame', () => {
-  assert.deepEqual(alignedSize(1280, 854), { cw: 1152, ch: 816 });
+test('alignedSize is a multiple of 16: 좌우 5%씩 잘라 1152, 위아래는 안 잘라 854→848', () => {
+  assert.deepEqual(alignedSize(1280, 854), { cw: 1152, ch: 848 });
 });
 
 test('alignedSize still accepts a plain number margin (all four sides)', () => {
@@ -155,7 +152,7 @@ test('adjustMatrix: 순서는 배율·회전 뒤에 이동', () => {
 });
 
 test('cropRect marks the window warpImage actually cuts out', () => {
-  assert.deepEqual(cropRect(1280, 854), { x0: 64, y0: 0, cw: 1152, ch: 816 });
+  assert.deepEqual(cropRect(1280, 854), { x0: 64, y0: 0, cw: 1152, ch: 848 });
   assert.deepEqual(cropRect(1280, 854, 0.05), { x0: 64, y0: 42, cw: 1152, ch: 768 });
 });
 

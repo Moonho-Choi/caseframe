@@ -49,6 +49,9 @@ function zerosMat(cv, h, w, type) {
   return new cv.Mat(h, w, type, new cv.Scalar(0));
 }
 
+// 세로 안전 이동 한도(H 대비). 0 = 밀지 않음 (2026-09-23, 아래 잘림 최소화).
+export const TOP_SHIFT_MAX = 0;
+
 export function eccEuclid(cv, ga, gb, W) {
   const { R, ctx } = runEcc(cv, ga, gb, identity(), cv.MOTION_EUCLIDEAN, 600, null);
   freeCtx(ctx);
@@ -147,9 +150,13 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
     // ~160px을 하단에서 자르므로, 4%/4%로 변경하면 상단을 ~4px 이내로 유지하면서도
     // 하단 손실을 예전 수준으로 돌릴 수 있다.
     // 가로도 같은 논리로, 다만 좌우는 공평하게 6%까지만 허용한다.
+    // (2026-09-23 개정) 원장 결정 "아래 잘림을 최대한 줄일 것": 실사진 25장 측정에서 세로 밀기
+    // 4%+아래 여백 4%는 아래를 평균 80px(최대 181px) 잘랐고, 둘 다 0이면 평균 24px(최대 113px)로
+    // 준다. 대신 위 손실이 평균 2→9px(최대 20→54px)로 늘지만, 그런 사진은 수동 맞춤으로 내리면
+    // 된다. 세로 밀기 한도를 0으로 두되 코드는 남긴다(TOP_SHIFT_MAX로 되돌릴 수 있게).
     const topYs = T2.map(t => apply(t, W / 2, 0)[1]);
     const minTop = Math.min(...topYs);
-    const dy = minTop < 0 ? Math.min(-minTop, 0.04 * H) : 0;
+    const dy = minTop < 0 ? Math.min(-minTop, TOP_SHIFT_MAX * H) : 0;
     const leftXs = T2.map(t => apply(t, 0, H / 2)[0]);
     const minLeft = Math.min(...leftXs);
     const dx = minLeft < 0 ? Math.min(-minLeft, 0.06 * W) : 0;
@@ -243,7 +250,8 @@ export async function neighborScores(cv, images, onProgress, isCancelled) {
 // 위는 0%로 두고 아래를 4% 잘라 그 양보분을 흡수한다. 좌우는 원래대로 5%씩
 // 공평하게. margin은 { top, bottom, left, right } 객체이고, 숫자 하나를 주면
 // (예전 방식과 호환) 네 변 모두 그 값으로 취급한다.
-const DEFAULT_MARGIN = { top: 0, bottom: 0.04, left: 0.05, right: 0.05 };
+// (2026-09-23) 아래 여백도 0으로 — 위 참조. 좌우 5%는 그대로.
+const DEFAULT_MARGIN = { top: 0, bottom: 0, left: 0.05, right: 0.05 };
 function normMargin(margin) {
   if (margin === undefined) return DEFAULT_MARGIN;
   if (typeof margin === 'number') return { top: margin, bottom: margin, left: margin, right: margin };
