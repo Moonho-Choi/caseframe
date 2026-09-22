@@ -1,7 +1,8 @@
 import { loadFiles, sortItems, monthsLabel, dateLabel, baseName } from './load.js';
 import { toGray, compose } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
-import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores } from './align.js';
+import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores, scoreVectors, pairScore } from './align.js';
+import { pickSmooth, percentile } from './select.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
 import { pickEncoder, Mp4Encoder, drawLabel, drawTitle, outputName } from './encode.js';
@@ -67,12 +68,13 @@ function setState(s) {
   uiState = s;
   // 만들기 버튼은 조절판 안에 있고 저장 버튼은 따로 있다(v3 설계 §2). 만들기가
   // 저장으로 바뀌지 않으므로, 완성된 뒤에도 사진을 손보고 바로 다시 만들 수 있다.
-  const mk = $('makeBtn'), ck = $('checkBtn');
+  const mk = $('makeBtn'), ck = $('checkBtn'), pk = $('pickBtn');
   if (s === 'busy') {
-    // 각도 검사도 같은 잠금·진행 틀을 쓰므로, 지금 도는 일 쪽 버튼에만 퍼센트를 적는다.
-    mk.textContent = state.job === 'check' ? '영상 만들기' : `만드는 중 ${jobPct}%`;
+    // 각도 검사·부드럽게 고르기도 같은 잠금·진행 틀을 쓰므로, 지금 도는 일 쪽 버튼에만 퍼센트를 적는다.
+    mk.textContent = state.job === 'make' ? `만드는 중 ${jobPct}%` : '영상 만들기';
     ck.textContent = state.job === 'check' ? `검사 중 ${jobPct}%` : '각도 검사';
-    mk.disabled = ck.disabled = true;
+    pk.textContent = state.job === 'pick' ? `고르는 중 ${jobPct}%` : '부드럽게 고르기';
+    mk.disabled = ck.disabled = pk.disabled = true;
   } else {
     // 제외한 사진은 영상에 들어가지 않으므로 버튼을 켤지 말지도 "포함된 장수"로 센다 (제외 설계 §2).
     const on = activeCount();
@@ -83,6 +85,8 @@ function setState(s) {
     const fresh = !!state.angle && !!state.cache && state.cache.key === cacheKey();
     ck.textContent = fresh ? '검사 완료' : '각도 검사';
     ck.disabled = on < MIN_CHECK || locked() || fresh;
+    pk.textContent = '부드럽게 고르기';
+    pk.disabled = pickCandidates().length < 3 || locked();
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
   // 만드는 중에는 화면에 걸린 영상이 곧 갈아치워질 이전 판이라 저장을 막는다.
@@ -122,6 +126,7 @@ function syncSettings() {
   $('labelMode').disabled = lock;
   $('title').disabled = lock;
   $('sortBtn').disabled = lock || state.items.length < 2;
+  $('pickLevel').disabled = lock;
   // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
   // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
   const noDate = state.items.reduce((n, it) => n + (it.date || it.excluded ? 0 : 1), 0);
@@ -838,6 +843,7 @@ function toggleExclude(i) {
   if (locked()) return;
   const it = state.items[i];
   it.excluded = !it.excluded;
+  it.autoExcluded = false;          // 손으로 정한 것은 '부드럽게 고르기'가 다시 건드리지 않는다
   // 구도 결과(캐시)·구도 실패 표시·각도 배지는 그대로 둔다. 뺀 사진까지 한 번에 맞춰 두었으므로
   // 다시 넣어도 바로 쓸 수 있고, "이웃과 많이 다름" 표시는 빼는 동안 계속 보여야 한다.
   leaveDone(); render();
@@ -922,6 +928,89 @@ function applyOrientation(res, active, fresh) {
 
 const median = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 
+// 구도 맞추기 결과를 마련한다: 캐시가 유효하면 그대로, 아니면 전체 사진(뺀 사진 포함)으로
+// 새로 계산해 사진에 붙여 둔다. 각도 검사·부드럽게 고르기·만들기가 함께 쓴다.
+async function ensureAlignment(cv, W, H, cancelled) {
+  const key = cacheKey();
+  if (state.cache && state.cache.key === key) { progress('구도 맞추는 중', 1, 1); return { T: cachedT(), status: cachedStatus() }; }
+  state.cache = null;
+  const grays = [];
+  try {
+    for (const it of state.items) grays.push(toGray(cv, it.image));
+    const { T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled);
+    if (cancelled()) throw new Error('취소');
+    storeAlignment(key, T, status);
+    return { T, status };
+  } finally { grays.forEach(g => g.delete()); }
+}
+// 이웃 점수 → 배지. 중앙값의 75% 아래면 "이웃과 많이 다름". 배지는 원래 자리(x.i)에 붙는다.
+function applyScores(active, scores) {
+  const med = median(scores), threshold = 0.75 * med;
+  const flagged = new Set();
+  scores.forEach((s, k) => { if (s < threshold) flagged.add(active[k].i); });
+  state.angle = { scores: spread(scores, active), threshold, median: med, flagged };
+  return { med, flagged };
+}
+
+// ── 부드럽게 고르기 ─────────────────────────────────────────────
+// 원장 관찰(09-23): 사진을 전부 넣으면 구도가 계속 바뀌어 어수선하고, 구도가 비슷한 사진만
+// 2~3장 간격으로 남기면 부드럽다. 그 고르기를 겹침 점수로 자동화한다 — 앞에서 남긴 사진과
+// 잘 겹치는 사진만 남기고 나머지는 빼 둔다(흐리게 남으므로 ↩로 되돌릴 수 있다).
+// 후보 = 지금 들어 있는 사진 + 지난 고르기가 자동으로 뺀 사진. 손으로 뺀 사진은 건드리지 않는다.
+function pickCandidates() { return state.items.map((it, i) => ({ it, i })).filter(x => !x.it.excluded || x.it.autoExcluded); }
+async function pickSmoothPhotos() {
+  if (state.busy || state.loading) return;
+  const cand = pickCandidates();
+  if (cand.length < 3) { toast('고를 사진이 3장 이상일 때 쓸 수 있습니다.'); return; }
+  closeViewer();
+  state.busy = true; state.cancelled = false; state.job = 'pick'; phases = PHASE_CHECK;
+  state.angle = null; setCheckNote('');
+  uiState = 'ready'; jobPct = 0; $('eta').textContent = '';
+  render();
+  const cancelled = () => state.cancelled;
+  try {
+    const cv = await cvReady();
+    const W = cand[0].it.image.width, H = cand[0].it.image.height;
+    const { T, status } = await ensureAlignment(cv, W, H, cancelled);
+    state.status = status.slice(); render();
+    if (cancelled()) throw new Error('취소');
+    progress('겹침 점수 계산 중');
+    const warped = cand.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
+    const V = await scoreVectors(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
+    const score = (a, b) => pairScore(V[a], V[b]);
+    // 문턱은 후보들의 이웃 점수 분포에서 정한다: 보통 = 중앙값(평범한 이웃만큼은 겹쳐야 남김),
+    // 강하게 = 상위 25% 경계.
+    const consecutive = [];
+    for (let k = 0; k + 1 < V.length; k++) consecutive.push(score(k, k + 1));
+    const thr = percentile(consecutive, $('pickLevel').value === 'strong' ? 0.75 : 0.5);
+    const keptIdx = pickSmooth(cand.length, score, thr, 3);
+    const kept = new Set(keptIdx);
+    let removed = 0;
+    cand.forEach(({ it }, k) => { const keep = kept.has(k); if (!keep) removed++; it.excluded = !keep; it.autoExcluded = !keep; });
+    // 남긴 사진끼리의 이웃 점수로 배지를 바로 갱신한다(다시 검사할 필요 없음).
+    const keptActive = keptIdx.map(k => cand[k]);
+    const scores = keptIdx.map((k, j) => {
+      let s = 0, c = 0;
+      if (j > 0) { s += score(keptIdx[j - 1], k); c++; }
+      if (j + 1 < keptIdx.length) { s += score(k, keptIdx[j + 1]); c++; }
+      return c ? s / c : 1;
+    });
+    applyScores(keptActive, scores);
+    progress('완료');
+    setCheckNote(`부드럽게 고르기: ${cand.length}장 중 ${keptIdx.length}장 남김 (기준 ${thr.toFixed(2)})`);
+    toast(removed
+      ? `잘 이어지지 않는 사진 ${removed}장을 뺐습니다. 흐린 사진은 ↩로 되돌릴 수 있고, 마음에 안 들면 "강하게/보통"을 바꿔 다시 고르세요.`
+      : '모든 사진이 잘 이어져 뺄 사진이 없습니다.');
+    leaveDone();
+  } catch (e) {
+    toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e));
+    state.angle = null; setCheckNote(''); progress('');
+  } finally {
+    state.busy = false; state.job = 'make'; phases = PHASE_MAKE;
+    render();
+  }
+}
+
 // ── 각도 검사 ─────────────────────────────────────────────────
 // 각도가 크게 다른 사진이 섞이면 영상이 어른거린다. 자동으로 빼지는 않고, 이웃과 잘
 // 겹치지 않는 사진에 주황 배지를 붙여 원장이 ✕로 빼도록 한다 (각도 검사 설계 §1).
@@ -942,21 +1031,7 @@ async function checkAngles() {
   try {
     const cv = await cvReady();
     const W = active[0].it.image.width, H = active[0].it.image.height;
-    const key = cacheKey();
-    let T, status;
-    if (state.cache && state.cache.key === key) {
-      T = cachedT(); status = cachedStatus();
-      progress('구도 맞추는 중', 1, 1);
-    } else {
-      state.cache = null;
-      grays = [];
-      // 뺀 사진도 함께 맞춘다 — 나중에 다시 넣어도 검사 없이 바로 쓰기 위해서다.
-      for (const it of state.items) grays.push(toGray(cv, it.image));
-      ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
-      grays.forEach(g => g.delete()); grays = null;
-      if (cancelled()) throw new Error('취소');
-      storeAlignment(key, T, status);
-    }
+    const { T, status } = await ensureAlignment(cv, W, H, cancelled);
     state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
     progress('겹침 점수 계산 중');
@@ -964,11 +1039,7 @@ async function checkAngles() {
     // 겹쳐야 하고, 그 결과가 배지에 그대로 보여야 한다 (수동 맞춤 설계 §1).
     const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
     const scores = await neighborScores(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
-    const med = median(scores), threshold = 0.75 * med;
-    // 배지는 원래 자리에 붙어야 하므로 표시할 사진도 원본 번호(x.i)로 담는다.
-    const flagged = new Set();
-    scores.forEach((s, k) => { if (s < threshold) flagged.add(active[k].i); });
-    state.angle = { scores: spread(scores, active), threshold, median: med, flagged };
+    const { med, flagged } = applyScores(active, scores);
     progress('완료');
     setCheckNote(`각도 검사: ${flagged.size}장 표시 (중앙값 ${med.toFixed(2)})`);
     toast(flagged.size
@@ -1005,20 +1076,7 @@ async function make() {
     const W = active[0].it.image.width, H = active[0].it.image.height;
     // 각도 검사가 이미 같은 사진 구성으로 구도를 맞춰 뒀으면 그 결과를 그대로 쓴다.
     // 제일 오래 걸리는 단계라, 검사 뒤 바로 만들면 그만큼 시간이 통째로 빠진다 (설계 §4).
-    const key = cacheKey();
-    let T, status;
-    if (state.cache && state.cache.key === key) {
-      T = cachedT(); status = cachedStatus();
-      progress('구도 맞추는 중', 1, 1);      // 막대는 이 단계 몫을 한 번에 채운다
-    } else {
-      state.cache = null;
-      grays = [];
-      for (const it of state.items) grays.push(toGray(cv, it.image));
-      ({ T, status } = await chainTransforms(cv, grays, W, H, (i, n) => progress('구도 맞추는 중', i, n), cancelled));
-      grays.forEach(g => g.delete()); grays = null;
-      if (cancelled()) throw new Error('취소');
-      storeAlignment(key, T, status);
-    }
+    const { T, status } = await ensureAlignment(cv, W, H, cancelled);
     // 기준 틀 사진은 만들 때마다 새로 만든다 — 수동 맞춤이 바뀌어도 늘 지금 값대로 나온다.
     const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
     state.status = status.slice(); render();
@@ -1194,6 +1252,7 @@ window.addEventListener('drop', e => {
 
 // ── 연결 ─────────────────────────────────────────────────────
 $('checkBtn').onclick = checkAngles;
+$('pickBtn').onclick = pickSmoothPhotos;
 $('makeBtn').onclick = make;
 $('saveBtn').onclick = save;
 $('saveBtn2').onclick = save;

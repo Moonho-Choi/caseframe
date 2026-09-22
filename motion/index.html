@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="같은 방향으로 찍은 교정 진행 사진을 넣으면 치아가 움직이는 영상(MP4)을 브라우저 안에서 만듭니다. 사진은 서버로 전송되지 않습니다.">
-<title>교정 진행 영상 — CaseFrame</title>
+<meta name="description" content="같은 방향으로 찍은 치료 진행 사진을 넣으면 치아가 움직이는 영상(MP4)을 브라우저 안에서 만듭니다. 사진은 서버로 전송되지 않습니다.">
+<title>치료 진행 영상 — CaseFrame</title>
 <style>
 :root{
   --bg:#000000; --panel:#121A22; --panel-2:#18222C; --line:#273240;
@@ -67,6 +67,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
   box-shadow:inset 0 1px 1px rgba(255,255,255,.3),0 4px 14px rgba(30,111,217,.32);
 }
 .btn.check:hover{background:linear-gradient(180deg,#63B0FF,#2C7CE4);border-color:rgba(77,163,255,.75)}
+/* 부드럽게 고르기: 각도 검사 아래 청록 한 줄(강도 선택 + 버튼) */
+.pick-row{display:flex;gap:6px;margin-bottom:8px}
+.pick-row select{
+  flex:0 0 74px;padding:6px 8px;color:var(--text);font:inherit;font-size:13px;
+  border:1px solid rgba(255,255,255,.14);border-radius:8px;background:#18222d;
+}
+.btn.pick{
+  flex:1;min-height:40px;font-size:14px;font-weight:700;color:#fff;
+  border-color:rgba(65,214,192,.55);background:linear-gradient(180deg,#3FC9B4,#1F9A87);
+}
+.btn.pick:hover{background:linear-gradient(180deg,#55D6C2,#26A995)}
 /* 저장 버튼: 청록, 높이 44px. .block이면 조절판 폭을 꽉 채운다 (v3 설계 §2) */
 .btn.save{min-height:44px;height:44px;padding:0 18px;font-size:14px;font-weight:700}
 .btn.save.block{width:100%}
@@ -131,7 +142,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 /* 끌어서 순서 바꾸기: 끌리는 사진은 반투명, 놓일 자리의 사진이 살짝 밀리며 그 앞에 청록 선 */
 .card.dragging,.asset.dragging{opacity:.35}
 .card,.asset{transition:transform .15s ease}
-.card.gap-before,.asset.gap-before{transform:translateX(12px)}
+.card.gap-before,.asset.gap-before{transform:translateX(24px)}
 .card.gap-before::after,.card.gap-after::after,.asset.gap-before::after,.asset.gap-after::after{
   content:'';position:absolute;top:4px;bottom:4px;width:4px;border-radius:2px;background:var(--accent);
   box-shadow:0 0 6px var(--accent);pointer-events:none;z-index:3;
@@ -350,7 +361,7 @@ body.drag #drop{display:block}
         <defs><linearGradient id="brandGrad" x1="2" y1="2" x2="62" y2="62"><stop stop-color="#4ADBC3"/><stop offset="1" stop-color="#1E9B84"/></linearGradient></defs>
       </svg>
     </div>
-    <div><b>CaseFrame</b><small>교정 진행 영상 · 로고를 누르면 처음으로</small></div>
+    <div><b>CaseFrame</b><small>치료 진행 영상 · 로고를 누르면 처음으로</small></div>
   </div>
   <span class="sep"></span>
   <div class="privacy-note" title="모든 사진은 사용하시는 컴퓨터 안에서만 처리되며, 인터넷이나 외부 서버로 전송되지 않습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 이 컴퓨터 안에서만 처리됩니다</span></div>
@@ -428,11 +439,18 @@ body.drag #drop{display:block}
           <option value="fast">빠르게</option>
         </select>
       </label>
-      <div class="control-title" id="stepLabel"><span>한 단계 시간</span><span class="value" id="stepv">2초</span></div>
-      <input id="step" type="range" min="0.5" max="3" step="0.1" value="2" aria-labelledby="stepLabel">
+      <div class="control-title" id="stepLabel"><span>한 단계 시간</span><span class="value" id="stepv">2.5초</span></div>
+      <input id="step" type="range" min="0.5" max="3" step="0.1" value="2.5" aria-labelledby="stepLabel">
     </div>
     <div class="control-section">
-      <button class="btn check" id="checkBtn" disabled title="이웃과 잘 겹치지 않는 사진을 찾아 표시합니다 (영상에 넣는 사진 3장 이상)">각도 검사</button>
+      <button class="btn check" id="checkBtn" disabled title="이웃과 잘 겹치지 않는 사진을 찾아 표시합니다 (영상에 넣는 사진 2장 이상)">각도 검사</button>
+      <div class="pick-row">
+        <select id="pickLevel" title="얼마나 엄격하게 고를지">
+          <option value="normal">보통</option>
+          <option value="strong">강하게</option>
+        </select>
+        <button class="btn pick" id="pickBtn" disabled title="앞 사진과 잘 겹치는 사진만 남기고 나머지는 자동으로 뺍니다. 뺀 사진은 흐리게 남아 ↩로 되돌릴 수 있습니다.">부드럽게 고르기</button>
+      </div>
       <button class="btn make" id="makeBtn" disabled>영상 만들기</button>
     </div>
     <div class="control-section">

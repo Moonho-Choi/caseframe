@@ -7,7 +7,7 @@ export function safeName(text) {
 // title(원장이 직접 쓴 제목)이 있으면 첫 사진 이름 대신 그것으로 시작한다.
 export function outputName(firstName, ext, quality = null, date = null, title = '') {
   const head = safeName(title) || baseName(firstName);
-  const base = `${head}_교정진행`;
+  const base = `${head}_치료진행`;
   const Q = { high: '고품질', fast: '빠르게', none: '단순' };
   let result = base;
 

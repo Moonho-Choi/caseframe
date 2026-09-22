@@ -1847,7 +1847,7 @@
         </button>
         <button class="start-lay" data-href="/motion/" title="새 탭에서 열립니다 — 배열 작업은 그대로 남습니다">
           <span class="start-mini sg-motion"><i class="t"></i><svg viewBox="0 0 72 48" fill="none" aria-hidden="true"><rect x="26" y="4" width="26" height="18" rx="2.5" stroke="#8B96A2" stroke-width="2.5"/><rect x="16" y="9" width="26" height="18" rx="2.5" stroke="#8B96A2" stroke-width="2.5"/><rect x="6" y="14" width="26" height="18" rx="2.5" stroke="#8B96A2" stroke-width="2.5" fill="#1B242E"/><path d="M50 14 L50 34 L66 24 Z" fill="#35C7B0"/></svg></span>
-          <h4>교정 진행 영상</h4><span class="start-cap">진행 사진을 이어 영상으로 (새 탭)</span>
+          <h4>치료 진행 영상</h4><span class="start-cap">진행 사진을 이어 영상으로 (새 탭)</span>
         </button>
       </div>
       <p class="start-quick">배열을 고르면 바로 편집이 시작됩니다</p>
@@ -3764,7 +3764,7 @@
     }
     document.querySelectorAll('.start-lay').forEach(startBtn => {
       startBtn.addEventListener('click', () => {
-        if (startBtn.dataset.href) {                      // 별도 도구(선 그리기·교정 진행 영상) — 새 탭으로
+        if (startBtn.dataset.href) {                      // 별도 도구(선 그리기·치료 진행 영상) — 새 탭으로
           window.open(startBtn.dataset.href, '_blank', 'noopener');
           startOverlay.classList.remove('open');
           return;

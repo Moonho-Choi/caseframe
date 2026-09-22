@@ -204,7 +204,7 @@ function scoreVector(cv, image) {
 // 사진 한 장을 줄이고 흐리는 데만 수십 ms가 걸려, 40장이면 화면이 통째로 멈춘 것처럼
 // 보인다. chainTransforms와 같은 방식으로 한 장마다 진행을 알리고 한 틱 양보한다.
 // onProgress는 총 n번 불린다. isCancelled()가 true면 Error('취소')를 던진다.
-export async function neighborScores(cv, images, onProgress, isCancelled) {
+export async function scoreVectors(cv, images, onProgress, isCancelled) {
   const n = images.length;
   const stop = () => { if (isCancelled && isCancelled()) throw new Error('취소'); };
   const V = [];
@@ -214,14 +214,20 @@ export async function neighborScores(cv, images, onProgress, isCancelled) {
     await yieldToUI();
     stop();
   }
+  return V;
+}
+// 두 점수 벡터의 겹침 점수(정규화 상관, 1에 가까울수록 비슷).
+export function pairScore(a, b) {
+  let s = 0;
+  for (let k = 0; k < a.length; k++) s += a[k] * b[k];
+  return s / a.length;
+}
+export async function neighborScores(cv, images, onProgress, isCancelled) {
+  const n = images.length;
+  const V = await scoreVectors(cv, images, onProgress, isCancelled);
   // pair[i] = 사진 i와 i+1의 겹침 점수
   const pair = [];
-  for (let i = 0; i + 1 < n; i++) {
-    const a = V[i], b = V[i + 1];
-    let s = 0;
-    for (let k = 0; k < a.length; k++) s += a[k] * b[k];
-    pair.push(s / a.length);
-  }
+  for (let i = 0; i + 1 < n; i++) pair.push(pairScore(V[i], V[i + 1]));
   // 사진 한 장의 점수 = 있는 쪽 이웃(앞·뒤) 점수의 평균. 양 끝은 한쪽만,
   // 사진이 2장이면 둘 다 같은 점수가 된다(설계 §2).
   return V.map((_, i) => {
