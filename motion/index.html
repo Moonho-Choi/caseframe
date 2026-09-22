@@ -128,9 +128,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 }
 .card .btns button:hover{background:rgba(0,0,0,.85);border-color:var(--accent);color:var(--accent)}
 .card.fail img{filter:grayscale(1)}
-/* 끌어서 순서 바꾸기: 끌리는 사진은 반투명, 놓일 자리에는 점선 빈 칸이 벌어진다 */
+/* 끌어서 순서 바꾸기: 끌리는 사진은 반투명, 놓일 자리의 사진이 살짝 밀리며 그 앞에 청록 선 */
 .card.dragging,.asset.dragging{opacity:.35}
-.card.ph,.asset.ph{border:2px dashed var(--accent);background:rgba(65,214,192,.08);pointer-events:none}
+.card,.asset{transition:transform .15s ease}
+.card.gap-before,.asset.gap-before{transform:translateX(12px)}
+.card.gap-before::after,.card.gap-after::after,.asset.gap-before::after,.asset.gap-after::after{
+  content:'';position:absolute;top:4px;bottom:4px;width:4px;border-radius:2px;background:var(--accent);
+  box-shadow:0 0 6px var(--accent);pointer-events:none;z-index:3;
+}
+.card.gap-before::after,.asset.gap-before::after{left:0}
+.card.gap-after::after,.asset.gap-after::after{right:0}
 /* 뺀 사진의 밝기는 서서히 바뀐다. from-bright/from-dark는 다시 그린 직후 한 프레임 동안 이전 밝기 */
 .card img,.asset img,#viewCanvas{transition:filter .5s ease}
 #grid .card.excluded.from-bright img,#assetList .asset.excluded.from-bright img{filter:none}
@@ -138,16 +145,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 /* 뺀 사진 한가운데 되돌리기 버튼 */
 .card .restore{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
-  padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;
-  color:var(--accent);background:rgba(0,0,0,.72);border:1px solid var(--accent);cursor:pointer;
+  padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;
+  color:rgba(255,255,255,.85);background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.4);
 }
-.card .restore:hover{background:rgba(0,0,0,.9);box-shadow:0 0 10px rgba(65,214,192,.5)}
+.card .restore:hover{color:#fff;background:rgba(0,0,0,.7);border-color:rgba(255,255,255,.8)}
 .view-stage{position:relative}
 .btn.restore-big{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
   padding:12px 24px;font-size:16px;font-weight:700;border-radius:999px;
-  color:var(--accent);background:rgba(0,0,0,.72);border:1px solid var(--accent);
+  color:rgba(255,255,255,.85);background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.4);
 }
+.btn.restore-big:hover{color:#fff;background:rgba(0,0,0,.7);border-color:rgba(255,255,255,.8)}
 .btn.restore-big[hidden]{display:none}
 .film-btns{display:flex;gap:6px;flex-wrap:wrap}
 .btn.sort{border-color:rgba(65,214,192,.5);color:var(--accent)}

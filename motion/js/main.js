@@ -250,8 +250,7 @@ function badgesFor(i) {
 let dragFrom = -1;
 function clearDropMarks() {
   document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-  if (dropPh) { dropPh.remove(); dropPh = null; }
-  document.querySelectorAll('#grid .card,#assetList .asset').forEach(el => { el.style.transform = ''; el.style.transition = ''; });
+  clearSlotMarks();
 }
 // 마우스가 사진의 왼쪽 반이면 그 앞, 오른쪽 반이면 그 뒤에 놓는다.
 function sideOf(el, x) { const r = el.getBoundingClientRect(); return x < r.left + r.width / 2; }
@@ -263,7 +262,7 @@ function dropTarget(from, j, before) {
 // 사진 사이 틈이나 빈 자리에 놓았을 때: 마우스에서 가장 가까운 사진을 고른다.
 function nearestCard(container, sel, x, y) {
   let best = null, bd = Infinity;
-  realCards(container, sel).forEach((el, k) => {
+  cardsOf(container, sel).forEach((el, k) => {
     const r = el.getBoundingClientRect();
     const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
     const d = dx * dx + dy * dy;
@@ -271,46 +270,36 @@ function nearestCard(container, sel, x, y) {
   });
   return best;
 }
-// 놓일 자리에는 빈 칸(placeholder)을 끼워 넣어 공간이 실제로 벌어진다. 자리가 바뀔 때 주변
-// 사진은 FLIP 방식(이전 위치에서 새 위치로 transform 전환)으로 미끄러진다 (원장 요청 09-23).
-let dropPh = null;
-function realCards(container, sel) { return [...container.querySelectorAll(sel)].filter(el => !el.classList.contains('ph')); }
-function flipMove(container, sel, mutate) {
-  const els = realCards(container, sel);
-  const before = els.map(el => el.getBoundingClientRect());
-  mutate();
-  els.forEach((el, k) => {
-    const a = before[k], b = el.getBoundingClientRect();
-    const dx = a.left - b.left, dy = a.top - b.top;
-    if (!dx && !dy) return;
-    el.style.transition = 'none'; el.style.transform = `translate(${dx}px,${dy}px)`;
-    requestAnimationFrame(() => { el.style.transition = 'transform .18s ease'; el.style.transform = ''; });
-  });
+// 놓일 자리(슬롯 k = "k번 사진 앞", k==n이면 맨 뒤) 표시: 사진 k가 오른쪽으로 살짝 밀리고 그 앞에
+// 청록 선이 선다. 배치는 바꾸지 않으므로 마우스 아래 사진이 바뀌지 않는다 — 빈 칸을 실제로 끼워
+// 넣던 방식은 재배치 때문에 주변 사진이 떨렸다(원장 소감 09-23, 하루 만에 철회).
+let dropSlotIdx = -1, dropContainer = null;
+function cardsOf(container, sel) { return [...container.querySelectorAll(sel)]; }
+function clearSlotMarks() {
+  document.querySelectorAll('.gap-before,.gap-after').forEach(el => el.classList.remove('gap-before', 'gap-after'));
+  dropSlotIdx = -1; dropContainer = null;
 }
-function placeDrop(container, sel, el, before) {
-  if (dropPh && dropPh.parentNode === container && (before ? dropPh.nextSibling === el : el.nextSibling === dropPh)) return;
-  const ref = before ? el : el.nextSibling;
-  flipMove(container, sel, () => {
-    if (!dropPh || dropPh.parentNode !== container) {
-      if (dropPh) dropPh.remove();
-      dropPh = document.createElement('div'); dropPh.className = (sel === '.card' ? 'card' : 'asset') + ' ph';
-    }
-    container.insertBefore(dropPh, ref);
-  });
-}
-// 빈 칸 앞에 있는 실제 사진 수 = n+1개 슬롯 기준의 삽입 자리. 없으면 -1.
-function dropSlot(container, sel) {
-  if (!dropPh || dropPh.parentNode !== container) return -1;
-  let n = 0;
-  for (const c of container.children) { if (c === dropPh) return n; if (c.matches(sel) && !c.classList.contains('ph')) n++; }
-  return -1;
+function setSlot(container, sel, k) {
+  if (dropContainer === container && dropSlotIdx === k) return;
+  clearSlotMarks();
+  const els = cardsOf(container, sel);
+  if (!els.length) return;
+  if (k < els.length) els[k].classList.add('gap-before');
+  else els[els.length - 1].classList.add('gap-after');
+  dropSlotIdx = k; dropContainer = container;
 }
 // 슬롯 p를 moveTo의 to로: 끌던 사진(from)을 빼면 그 뒤 슬롯은 하나씩 당겨진다.
 function slotToIndex(from, p) { return p > from ? p - 1 : p; }
 function markDrop(el, before) {
   const container = el.closest('#grid') ? $('grid') : $('assetList');
-  placeDrop(container, el.classList.contains('card') ? '.card' : '.asset', el, before);
+  const sel = el.classList.contains('card') ? '.card' : '.asset';
+  const j = cardsOf(container, sel).indexOf(el);
+  const k = before ? j : j + 1;
+  // 끌던 사진의 바로 앞·뒤 슬롯은 제자리라 표시하지 않는다.
+  if (k === dragFrom || k === dragFrom + 1) { clearSlotMarks(); return; }
+  setSlot(container, sel, k);
 }
+function currentSlot(container) { return dropContainer === container ? dropSlotIdx : -1; }
 // 격자(세로)·사진 줄(가로)의 가장자리 근처로 끌고 가면 저절로 밀린다 — 화면 밖의 자리로도
 // 옮길 수 있게 (원장 소감 09-22: 여러 칸 이동이 안 됨).
 function autoScroll(e) {
@@ -332,17 +321,18 @@ function wireContainerDrop(container, sel) {
   container.addEventListener('dragover', e => {
     if (dragFrom < 0) return;
     e.preventDefault();
-    if (e.target.closest && e.target.closest('.ph')) return;      // 빈 칸 위: 그대로
     if (e.target.closest && e.target.closest(sel)) return;        // 사진 위는 사진이 맡는다
+    // 틈 위에서는 이미 표시한 자리를 지킨다(밀린 사진의 가장자리에서 표시가 오락가락하지 않게).
+    if (currentSlot(container) >= 0) return;
     const n = nearestCard(container, sel, e.clientX, e.clientY);
     if (!n || n.k === dragFrom) return;
     markDrop(n.el, sideOf(n.el, e.clientX));
   });
   container.addEventListener('drop', e => {
-    if (dragFrom < 0 || (e.target.closest && e.target.closest(sel) && !e.target.closest('.ph'))) return;
+    if (dragFrom < 0 || (e.target.closest && e.target.closest(sel))) return;
     e.preventDefault(); e.stopPropagation(); endDrag();
     const from = dragFrom; dragFrom = -1;
-    const p = dropSlot(container, sel);
+    const p = currentSlot(container);
     clearDropMarks();
     if (p >= 0) { moveTo(from, slotToIndex(from, p)); return; }
     const n = nearestCard(container, sel, e.clientX, e.clientY);
@@ -363,7 +353,7 @@ function wireDrag(el, i, lock) {
     if (dragFrom < 0 || dragFrom === i) return;
     markDrop(el, sideOf(el, e.clientX));
   };
-  el.ondragleave = e => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop-before', 'drop-after'); };
+  el.ondragleave = () => {};
   // 운영체제에서 끌어온 파일은 text/plain이 빈 문자열이라 +'' === 0이 되고, 예전에는
   // 그게 moveTo(0, i)로 해석되어 사진 1이 슬쩍 옮겨지고 끌어온 파일은 사라졌다.
   // 파일이 실려 있으면 순서 바꾸기가 아니라 "사진 추가"로 보낸다.
@@ -373,12 +363,10 @@ function wireDrag(el, i, lock) {
     // 안에서 끈 사진은 dragFrom이 안다(getData는 브라우저에 따라 비어 올 수 있다).
     const from = dragFrom >= 0 ? dragFrom : +e.dataTransfer.getData('text/plain');
     dragFrom = -1;
-    const container = el.closest('#grid') ? $('grid') : $('assetList');
-    const p = dropSlot(container, el.classList.contains('card') ? '.card' : '.asset');
+    // 사진 위에 놓았으면 표시해 둔 자리보다 "지금 놓은 지점"(이 사진의 왼쪽/오른쪽 반)을 믿는다 —
+    // 마우스 이동 중 표시 갱신이 빠졌더라도 놓은 곳으로 간다. 틈에 놓았을 때만 표시한 자리를 쓴다.
     clearDropMarks();
-    if (!Number.isInteger(from) || from < 0 || from >= state.items.length) return;
-    if (p >= 0) { moveTo(from, slotToIndex(from, p)); return; }
-    if (from === i) return;
+    if (!Number.isInteger(from) || from < 0 || from >= state.items.length || from === i) return;
     moveTo(from, dropTarget(from, i, sideOf(el, e.clientX)));
   };
 }
