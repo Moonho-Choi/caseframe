@@ -4,7 +4,7 @@ import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores } from './align.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
-import { pickEncoder, Mp4Encoder, drawLabel, outputName } from './encode.js';
+import { pickEncoder, Mp4Encoder, drawLabel, drawTitle, outputName } from './encode.js';
 import { cvReady } from './cvready.js';
 
 const $ = id => document.getElementById(id);
@@ -78,8 +78,11 @@ function setState(s) {
     const on = activeCount();
     mk.textContent = '영상 만들기';
     mk.disabled = on < 2 || locked();
-    ck.textContent = '각도 검사';
-    ck.disabled = on < MIN_CHECK || locked();
+    // 검사 결과(구도 캐시 + 겹침 점수)가 아직 유효하면 눌러도 같은 결과라 "검사 완료"로
+    // 잠근다. 새 사진·순서·뒤집기·수동 맞춤으로 결과가 낡으면 다시 켜진다 (원장 소감 09-22).
+    const fresh = !!state.angle && !!state.cache && state.cache.key === cacheKey();
+    ck.textContent = fresh ? '검사 완료' : '각도 검사';
+    ck.disabled = on < MIN_CHECK || locked() || fresh;
   }
   // 저장 버튼 두 개(조절판 결과 칸·영상 아래)는 같은 일을 하고 같이 켜지고 깜빡인다.
   // 만드는 중에는 화면에 걸린 영상이 곧 갈아치워질 이전 판이라 저장을 막는다.
@@ -117,6 +120,7 @@ function syncSettings() {
   $('quality').disabled = gpuLocked || lock;
   $('step').disabled = lock;
   $('labelMode').disabled = lock;
+  $('title').disabled = lock;
   // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
   // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
   const noDate = state.items.reduce((n, it) => n + (it.date || it.excluded ? 0 : 1), 0);
@@ -246,6 +250,63 @@ let dragFrom = -1;
 function clearDropMarks() {
   document.querySelectorAll('.drop-before,.drop-after,.dragging').forEach(el => el.classList.remove('drop-before', 'drop-after', 'dragging'));
 }
+// 마우스가 사진의 왼쪽 반이면 그 앞, 오른쪽 반이면 그 뒤에 놓는다.
+function sideOf(el, x) { const r = el.getBoundingClientRect(); return x < r.left + r.width / 2; }
+// "j번 앞/뒤"를 moveTo(from, to)의 to로 바꾼다(from을 뺀 뒤의 자리).
+function dropTarget(from, j, before) {
+  if (before) return from < j ? j - 1 : j;
+  return from < j ? j : j + 1;
+}
+// 사진 사이 틈이나 빈 자리에 놓았을 때: 마우스에서 가장 가까운 사진을 고른다.
+function nearestCard(container, sel, x, y) {
+  let best = null, bd = Infinity;
+  container.querySelectorAll(sel).forEach((el, k) => {
+    const r = el.getBoundingClientRect();
+    const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = { el, k }; }
+  });
+  return best;
+}
+function markDrop(el, before) {
+  document.querySelectorAll('.drop-before,.drop-after').forEach(x => { if (x !== el) x.classList.remove('drop-before', 'drop-after'); });
+  el.classList.toggle('drop-before', before); el.classList.toggle('drop-after', !before);
+}
+// 격자(세로)·사진 줄(가로)의 가장자리 근처로 끌고 가면 저절로 밀린다 — 화면 밖의 자리로도
+// 옮길 수 있게 (원장 소감 09-22: 여러 칸 이동이 안 됨).
+function autoScroll(e) {
+  if (dragFrom < 0) return;
+  const EDGE = 48, STEP = 14;
+  const g = $('grid'), gr = g.getBoundingClientRect();
+  if (e.clientX >= gr.left && e.clientX <= gr.right) {
+    if (e.clientY > gr.top && e.clientY < gr.top + EDGE) g.scrollTop -= STEP;
+    else if (e.clientY < gr.bottom && e.clientY > gr.bottom - EDGE) g.scrollTop += STEP;
+  }
+  const l = $('assetList'), lr = l.getBoundingClientRect();
+  if (e.clientY >= lr.top && e.clientY <= lr.bottom) {
+    if (e.clientX > lr.left && e.clientX < lr.left + EDGE) l.scrollLeft -= STEP;
+    else if (e.clientX < lr.right && e.clientX > lr.right - EDGE) l.scrollLeft += STEP;
+  }
+}
+// 틈에 놓기: 격자·사진 줄 자체가 놓는 자리를 받는다.
+function wireContainerDrop(container, sel) {
+  container.addEventListener('dragover', e => {
+    if (dragFrom < 0) return;
+    e.preventDefault();
+    if (e.target.closest && e.target.closest(sel)) return;   // 사진 위는 사진이 맡는다
+    const n = nearestCard(container, sel, e.clientX, e.clientY);
+    if (!n || n.k === dragFrom) return;
+    markDrop(n.el, sideOf(n.el, e.clientX));
+  });
+  container.addEventListener('drop', e => {
+    if (dragFrom < 0 || (e.target.closest && e.target.closest(sel))) return;
+    e.preventDefault(); e.stopPropagation(); endDrag(); clearDropMarks();
+    const from = dragFrom; dragFrom = -1;
+    const n = nearestCard(container, sel, e.clientX, e.clientY);
+    if (!n || n.k === from) return;
+    moveTo(from, dropTarget(from, n.k, sideOf(n.el, e.clientX)));
+  });
+}
 function wireDrag(el, i, lock) {
   el.draggable = !lock;
   el.ondragstart = e => {
@@ -257,20 +318,20 @@ function wireDrag(el, i, lock) {
   el.ondragover = e => {
     e.preventDefault();
     if (dragFrom < 0 || dragFrom === i) return;
-    const before = dragFrom > i;
-    el.classList.toggle('drop-before', before); el.classList.toggle('drop-after', !before);
+    markDrop(el, sideOf(el, e.clientX));
   };
-  el.ondragleave = () => el.classList.remove('drop-before', 'drop-after');
+  el.ondragleave = e => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop-before', 'drop-after'); };
   // 운영체제에서 끌어온 파일은 text/plain이 빈 문자열이라 +'' === 0이 되고, 예전에는
   // 그게 moveTo(0, i)로 해석되어 사진 1이 슬쩍 옮겨지고 끌어온 파일은 사라졌다.
   // 파일이 실려 있으면 순서 바꾸기가 아니라 "사진 추가"로 보낸다.
   el.ondrop = e => {
     e.preventDefault(); e.stopPropagation(); endDrag(); clearDropMarks();
-    if (e.dataTransfer.files && e.dataTransfer.files.length) { addFiles(e.dataTransfer.files); return; }
-    const from = +e.dataTransfer.getData('text/plain');
+    if (e.dataTransfer.files && e.dataTransfer.files.length) { dragFrom = -1; addFiles(e.dataTransfer.files); return; }
+    // 안에서 끈 사진은 dragFrom이 안다(getData는 브라우저에 따라 비어 올 수 있다).
+    const from = dragFrom >= 0 ? dragFrom : +e.dataTransfer.getData('text/plain');
     dragFrom = -1;
-    if (!Number.isInteger(from) || from < 0 || from >= state.items.length) return;
-    moveTo(from, i);
+    if (!Number.isInteger(from) || from < 0 || from >= state.items.length || from === i) return;
+    moveTo(from, dropTarget(from, i, sideOf(el, e.clientX)));
   };
 }
 function btnRow(i, lock, defs) {
@@ -905,6 +966,7 @@ async function make() {
     // 글씨는 처음 고른 대로 한 벌만 만든다(미리보기 = 저장 파일). 날짜가 없는 사진은
     // 어느 쪽을 골랐든 그 구간만 글씨 없이 간다 (v3 설계 §1).
     const labelMode = $('labelMode').value;
+    const title = $('title').value.trim();
     const firstDated = active.map(x => x.it).find(it => it.date);
     const labels = active.map(({ it }) => {
       if (labelMode === 'none' || !it.date || !firstDated) return '';
@@ -924,7 +986,7 @@ async function make() {
     etaReset();
     for (let i = 0; i < n - 1; i++) {
       await transition(chwAt(i), chwAt(i + 1), cw, ch, N, aiLevels, rife, async f => {
-        ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw);
+        ctx.putImageData(chwToImage(f, cw, ch), 0, 0); drawLabel(ctx, labels[i], cw); drawTitle(ctx, title, cw);
         await enc.addFrame(canvas, idx++);
         progress('중간 그림 그리는 중', idx, total);
         etaUpdate(idx, total);
@@ -936,7 +998,7 @@ async function make() {
       chwCache.delete(i);
       if (cancelled()) throw new Error('취소');
     }
-    ctx.putImageData(chwToImage(chwAt(n - 1), cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw);
+    ctx.putImageData(chwToImage(chwAt(n - 1), cw, ch), 0, 0); drawLabel(ctx, labels[labels.length - 1], cw); drawTitle(ctx, title, cw);
     for (let k = 0; k < Math.round(fps); k++) await enc.addFrame(canvas, idx++);
     progress('영상 파일 만드는 중');
     const blob = await enc.finish();
@@ -945,7 +1007,7 @@ async function make() {
     $('video').src = url;
     // 인공지능이 돌지 않아 단순 겹치기로 만들었으면 파일 이름도 "단순"으로 남긴다.
     const usedQuality = (!rife || rife.failed) ? 'none' : quality;
-    lastName = outputName(active[0].it.name, 'mp4', usedQuality, new Date());
+    lastName = outputName(active[0].it.name, 'mp4', usedQuality, new Date(), title);
     showResult(total / fps, cw, ch, blob.size, lastName, usedQuality === 'none');
     $('eta').textContent = '';
     uiState = 'done'; progress('완료', total, total);
@@ -1040,7 +1102,9 @@ window.addEventListener('dragenter', e => {
   if (!hasFiles(e) || locked()) return;
   dragDepth++; document.body.classList.add('drag');
 });
-window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('dragover', e => { e.preventDefault(); autoScroll(e); });
+wireContainerDrop($('grid'), '.card');
+wireContainerDrop($('assetList'), '.asset');
 window.addEventListener('dragleave', e => {
   if (!hasFiles(e)) return;
   dragDepth = Math.max(0, dragDepth - 1);

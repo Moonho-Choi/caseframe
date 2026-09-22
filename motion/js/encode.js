@@ -1,7 +1,13 @@
 import { baseName } from './load.js';
 
-export function outputName(firstName, ext, quality = null, date = null) {
-  const base = `${baseName(firstName)}_교정진행`;
+// 파일 이름에 쓸 수 없는 글자를 빼고 앞뒤 공백을 지운다. 너무 길면 40자에서 자른다.
+export function safeName(text) {
+  return String(text || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
+}
+// title(원장이 직접 쓴 제목)이 있으면 첫 사진 이름 대신 그것으로 시작한다.
+export function outputName(firstName, ext, quality = null, date = null, title = '') {
+  const head = safeName(title) || baseName(firstName);
+  const base = `${head}_교정진행`;
   const Q = { high: '고품질', fast: '빠르게', none: '단순' };
   let result = base;
 
@@ -19,16 +25,20 @@ export function outputName(firstName, ext, quality = null, date = null) {
   return `${result}.${ext}`;
 }
 export function labelMetrics(w) { return { band: Math.round(w * 0.055), font: Math.round(w * 0.035), pad: Math.round(w * 0.012) }; }
-export function drawLabel(ctx, text, w) {
+// 왼쪽 위 띠(날짜·경과 기간). align='right'면 오른쪽 위 띠(제목).
+export function drawLabel(ctx, text, w, align = 'left') {
   if (!text) return;
   const { band, font, pad } = labelMetrics(w);
   ctx.save();
   ctx.font = `bold ${font}px sans-serif`;
-  const tw = ctx.measureText(text).width;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, tw + pad * 2, band);
-  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(text, pad, band / 2);
+  const tw = Math.min(ctx.measureText(text).width, w * 0.6);
+  const x0 = align === 'right' ? w - (tw + pad * 2) : 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x0, 0, tw + pad * 2, band);
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x0 + pad, band / 2, tw);
   ctx.restore();
 }
+export function drawTitle(ctx, text, w) { drawLabel(ctx, text, w, 'right'); }
 // 'mp4'(WebCodecs 있음) 아니면 null. 예전에는 MediaRecorder로 WebM을 만드는 예비
 // 경로가 있었지만, (1) 사파리 16.4+·파이어폭스 130+도 VideoEncoder를 갖고 있어 그
 // 경로가 실제로 고른 적이 없고, (2) MediaRecorder는 실제 시계로 녹화해서 프레임마다
