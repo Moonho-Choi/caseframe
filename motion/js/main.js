@@ -2,7 +2,7 @@ import { loadFiles, sortItems, monthsLabel, dateLabel, baseName } from './load.j
 import { toGray, compose } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores, scoreVectors, pairScore } from './align.js';
-import { pickSmooth, percentile } from './select.js';
+import { pickSmooth } from './select.js';
 import { matchColors } from './color.js';
 import { planTiming, aiLevelsFor, Rife, transition, imageToCHW, chwToImage } from './interp.js';
 import { pickEncoder, Mp4Encoder, drawLabel, drawTitle, outputName } from './encode.js';
@@ -126,7 +126,6 @@ function syncSettings() {
   $('labelMode').disabled = lock;
   $('title').disabled = lock;
   $('sortBtn').disabled = lock || state.items.length < 2;
-  $('pickLevel').disabled = lock;
   // 날짜 없는 사진이 섞여도 선택을 강제로 바꾸지 않는다. 그 사진 구간만 글씨 없이
   // 가고, 왜 비었는지는 작은 안내로 알린다 (v3 설계 §1).
   const noDate = state.items.reduce((n, it) => n + (it.date || it.excluded ? 0 : 1), 0);
@@ -958,6 +957,7 @@ function applyScores(active, scores) {
 // 잘 겹치는 사진만 남기고 나머지는 빼 둔다(흐리게 남으므로 ↩로 되돌릴 수 있다).
 // 후보 = 지금 들어 있는 사진 + 지난 고르기가 자동으로 뺀 사진. 손으로 뺀 사진은 건드리지 않는다.
 function pickCandidates() { return state.items.map((it, i) => ({ it, i })).filter(x => !x.it.excluded || x.it.autoExcluded); }
+const PICK_RATIO = 0.8;
 async function pickSmoothPhotos() {
   if (state.busy || state.loading) return;
   const cand = pickCandidates();
@@ -978,11 +978,11 @@ async function pickSmoothPhotos() {
     const warped = cand.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
     const V = await scoreVectors(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const score = (a, b) => pairScore(V[a], V[b]);
-    // 문턱은 후보들의 이웃 점수 분포에서 정한다: 보통 = 중앙값(평범한 이웃만큼은 겹쳐야 남김),
-    // 강하게 = 상위 25% 경계.
+    // 문턱 = 이웃 점수 중앙값의 80%. "너무 벗어나는 사진만" 빼자는 원장 결정(09-23)으로 중앙값
+    // 기준(절반 가까이 걸러짐)에서 낮췄다. 각도 검사 배지 기준(75%)보다 살짝 엄격한 정도.
     const consecutive = [];
     for (let k = 0; k + 1 < V.length; k++) consecutive.push(score(k, k + 1));
-    const thr = percentile(consecutive, $('pickLevel').value === 'strong' ? 0.75 : 0.5);
+    const thr = PICK_RATIO * median(consecutive);
     const keptIdx = pickSmooth(cand.length, score, thr, 3);
     const kept = new Set(keptIdx);
     let removed = 0;
@@ -999,8 +999,8 @@ async function pickSmoothPhotos() {
     progress('완료');
     setCheckNote(`부드럽게 고르기: ${cand.length}장 중 ${keptIdx.length}장 남김 (기준 ${thr.toFixed(2)})`);
     toast(removed
-      ? `잘 이어지지 않는 사진 ${removed}장을 뺐습니다. 흐린 사진은 ↩로 되돌릴 수 있고, 마음에 안 들면 "강하게/보통"을 바꿔 다시 고르세요.`
-      : '모든 사진이 잘 이어져 뺄 사진이 없습니다.');
+      ? `구도가 크게 어긋나는 사진 ${removed}장을 뺐습니다. 흐린 사진은 ↩로 되돌릴 수 있습니다.`
+      : '구도가 크게 어긋나는 사진이 없어 전부 그대로 둡니다.');
     leaveDone();
   } catch (e) {
     toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e));
