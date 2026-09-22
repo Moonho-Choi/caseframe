@@ -95,8 +95,8 @@ test('medianFrame of identical transforms is identity-like', () => {
   for (let j = 0; j < 6; j++) assert.ok(Math.abs(R[j] - T[0][j]) < 1e-6);
 });
 
-test('alignedSize is a multiple of 16: 좌우 5%씩 잘라 1152, 위아래는 안 잘라 854→848', () => {
-  assert.deepEqual(alignedSize(1280, 854), { cw: 1152, ch: 848 });
+test('alignedSize is a multiple of 16: 네 변 다 안 잘라 1280×854→1280×848', () => {
+  assert.deepEqual(alignedSize(1280, 854), { cw: 1280, ch: 848 });
 });
 
 test('alignedSize still accepts a plain number margin (all four sides)', () => {
@@ -152,7 +152,7 @@ test('adjustMatrix: 순서는 배율·회전 뒤에 이동', () => {
 });
 
 test('cropRect marks the window warpImage actually cuts out', () => {
-  assert.deepEqual(cropRect(1280, 854), { x0: 64, y0: 0, cw: 1152, ch: 848 });
+  assert.deepEqual(cropRect(1280, 854), { x0: 0, y0: 0, cw: 1280, ch: 848 });
   assert.deepEqual(cropRect(1280, 854, 0.05), { x0: 64, y0: 42, cw: 1152, ch: 768 });
 });
 

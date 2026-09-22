@@ -51,6 +51,8 @@ function zerosMat(cv, h, w, type) {
 
 // 세로 안전 이동 한도(H 대비). 0 = 밀지 않음 (2026-09-23, 아래 잘림 최소화).
 export const TOP_SHIFT_MAX = 0;
+// 가로 안전 이동 한도(W 대비). 0 = 밀지 않음 (2026-09-23).
+export const SIDE_SHIFT_MAX = 0;
 
 export function eccEuclid(cv, ga, gb, W) {
   const { R, ctx } = runEcc(cv, ga, gb, identity(), cv.MOTION_EUCLIDEAN, 600, null);
@@ -159,7 +161,9 @@ export async function chainTransforms(cv, grays, W, H, onProgress, isCancelled) 
     const dy = minTop < 0 ? Math.min(-minTop, TOP_SHIFT_MAX * H) : 0;
     const leftXs = T2.map(t => apply(t, 0, H / 2)[0]);
     const minLeft = Math.min(...leftXs);
-    const dx = minLeft < 0 ? Math.min(-minLeft, 0.06 * W) : 0;
+    // 가로도 같은 결정(09-23): 실사진 25장에서 밀기 6%+여백 5%는 오른쪽을 평균 149px(최대 218px)
+    // 잘랐고, 둘 다 0이면 왼쪽 15·오른쪽 20px. 좌우 위치 슬라이더로 케이스마다 배분한다.
+    const dx = minLeft < 0 ? Math.min(-minLeft, SIDE_SHIFT_MAX * W) : 0;
     if (dy || dx) {
       const shift = new Float64Array([1, 0, dx, 0, 1, dy]);
       T2 = T2.map(t => compose(shift, t));
@@ -250,8 +254,8 @@ export async function neighborScores(cv, images, onProgress, isCancelled) {
 // 위는 0%로 두고 아래를 4% 잘라 그 양보분을 흡수한다. 좌우는 원래대로 5%씩
 // 공평하게. margin은 { top, bottom, left, right } 객체이고, 숫자 하나를 주면
 // (예전 방식과 호환) 네 변 모두 그 값으로 취급한다.
-// (2026-09-23) 아래 여백도 0으로 — 위 참조. 좌우 5%는 그대로.
-const DEFAULT_MARGIN = { top: 0, bottom: 0, left: 0.05, right: 0.05 };
+// (2026-09-23) 네 변 모두 0 — 잘림 최소화. 잘림 배분은 위아래·좌우 위치 슬라이더가 맡는다.
+const DEFAULT_MARGIN = { top: 0, bottom: 0, left: 0, right: 0 };
 function normMargin(margin) {
   if (margin === undefined) return DEFAULT_MARGIN;
   if (typeof margin === 'number') return { top: margin, bottom: margin, left: margin, right: margin };
