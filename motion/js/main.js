@@ -1,4 +1,4 @@
-import { loadFiles, monthsLabel, dateLabel, baseName } from './load.js';
+import { loadFiles, insertIndex, monthsLabel, dateLabel, baseName } from './load.js';
 import { toGray, compose } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores } from './align.js';
@@ -16,7 +16,7 @@ const $ = id => document.getElementById(id);
 // job:    지금 도는 일 — 'make'(영상 만들기) 또는 'check'(각도 검사). 버튼 글씨·진행 몫이 다르다.
 const state = { items: [], flags: [], status: [], cancelled: false, busy: false, loading: false, cache: null, angle: null, job: 'make' };
 const MAX = 40;
-const MIN_CHECK = 3;               // 사진 3장 미만이면 이웃이 부족해 검사하지 않는다 (설계 §2)
+const MIN_CHECK = 2;               // 2장이면 구도만 맞추고(수동 맞춤용), 배지는 3장부터 (원장 소감 09-22)
 // RIFE 세션(21.6MB 모델 + GPU 버퍼)은 만들기를 누를 때마다 새로 올리면 그만큼씩 쌓인다.
 // 한 번 만든 세션을 계속 돌려 쓰고, 추론이 고장난 경우에만 버린다.
 let rifeCache = null;
@@ -238,17 +238,37 @@ function badgesFor(i) {
   return out;
 }
 // 순서 바꾸기·파일 받기는 큰 카드와 작은 사진이 똑같이 동작한다.
+// 끄는 동안의 표시(원장 소감 09-22: 끌어도 아무 표시가 없어 되는지 몰랐음): 끌리는 사진은
+// 반투명(.dragging), 놓일 자리에는 청록 세로 선(.drop-before/.drop-after). moveTo(from, i)는
+// from > i면 i번 앞에, from < i면 i번 뒤에 놓으므로 선도 그쪽 가장자리에 긋는다.
+// dragover 중에는 dataTransfer를 읽을 수 없어(크롬 보호) 끌기 시작 번호를 dragFrom에 둔다.
+let dragFrom = -1;
+function clearDropMarks() {
+  document.querySelectorAll('.drop-before,.drop-after,.dragging').forEach(el => el.classList.remove('drop-before', 'drop-after', 'dragging'));
+}
 function wireDrag(el, i, lock) {
   el.draggable = !lock;
-  el.ondragstart = e => { if (lock) { e.preventDefault(); return; } e.dataTransfer.setData('text/plain', String(i)); };
-  el.ondragover = e => e.preventDefault();
+  el.ondragstart = e => {
+    if (lock) { e.preventDefault(); return; }
+    e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move';
+    dragFrom = i; el.classList.add('dragging');
+  };
+  el.ondragend = () => { dragFrom = -1; clearDropMarks(); };
+  el.ondragover = e => {
+    e.preventDefault();
+    if (dragFrom < 0 || dragFrom === i) return;
+    const before = dragFrom > i;
+    el.classList.toggle('drop-before', before); el.classList.toggle('drop-after', !before);
+  };
+  el.ondragleave = () => el.classList.remove('drop-before', 'drop-after');
   // 운영체제에서 끌어온 파일은 text/plain이 빈 문자열이라 +'' === 0이 되고, 예전에는
   // 그게 moveTo(0, i)로 해석되어 사진 1이 슬쩍 옮겨지고 끌어온 파일은 사라졌다.
   // 파일이 실려 있으면 순서 바꾸기가 아니라 "사진 추가"로 보낸다.
   el.ondrop = e => {
-    e.preventDefault(); e.stopPropagation(); endDrag();
+    e.preventDefault(); e.stopPropagation(); endDrag(); clearDropMarks();
     if (e.dataTransfer.files && e.dataTransfer.files.length) { addFiles(e.dataTransfer.files); return; }
     const from = +e.dataTransfer.getData('text/plain');
+    dragFrom = -1;
     if (!Number.isInteger(from) || from < 0 || from >= state.items.length) return;
     moveTo(from, i);
   };
@@ -289,9 +309,8 @@ function renderGrid() {
       for (const [cls, text, tip] of bl) { const s = document.createElement('span'); s.className = `badge ${cls}`; s.textContent = text; if (tip) s.title = tip; wrap.appendChild(s); }
       d.appendChild(wrap);
     }
+    // 순서는 끌어서 바꾼다(◀▶ 버튼은 09-22 원장 요청으로 제거).
     d.appendChild(btnRow(i, lock, [
-      ['◀', '앞으로 옮기기', () => move(i, -1)],
-      ['▶', '뒤로 옮기기', () => move(i, 1)],
       ['⇄', '좌우 뒤집기', () => flip(i)],
       excludeBtn(i, it),
     ]));
@@ -301,6 +320,9 @@ function renderGrid() {
 }
 function renderStrip() {
   const list = $('assetList');
+  // 통째로 다시 그리면 내용이 잠깐 비어 scrollLeft가 0으로 돌아간다(빼기를 누르면 맨 앞으로
+  // 튀던 원인, 원장 소감 09-22). 그리기 전 위치를 기억했다가 되돌린다.
+  const keep = list.scrollLeft;
   [...list.querySelectorAll('.asset')].forEach(el => el.remove());
   $('assetEmpty').style.display = state.items.length ? 'none' : '';
   const lock = locked();
@@ -311,6 +333,8 @@ function renderStrip() {
     if (f && f.warn === 'other') d.classList.add('warn-other');
     if (state.status[i] === 'fail') d.classList.add('fail');
     if (it.excluded) d.classList.add('excluded');
+    // 크게 보기 중인 사진은 사진 줄에서도 청록 테두리로 알아본다 (원장 소감 09-22).
+    if (uiState === 'view' && i === viewIdx) d.classList.add('current');
     d.title = `${it.no}. ${it.name}`;
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
     const no = document.createElement('div'); no.className = 'no'; no.textContent = captionOf(it); d.appendChild(no);
@@ -331,6 +355,10 @@ function renderStrip() {
     wireDrag(d, i, lock);
     list.appendChild(d);
   });
+  list.scrollLeft = keep;
+  // 보고 있는 사진이 줄 밖에 있으면 그 자리까지만 따라간다(보이면 움직이지 않는다).
+  const cur = list.querySelector('.asset.current');
+  if (cur) cur.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 function render() { renderGrid(); renderStrip(); syncState(); }
 
@@ -644,7 +672,6 @@ function invalidateCheck() {
   invalidateScores();
 }
 
-function move(i, d) { moveTo(i, i + d); }
 function moveTo(from, to) {
   if (locked()) return;
   // 순서가 바뀌면 뷰어가 보던 자리(viewIdx)가 다른 사진을 가리키게 된다. 먼저 나온다.
@@ -701,11 +728,15 @@ async function addFiles(files) {
     items.forEach(it => { it.original = it.image; it.flipped = false; it.adjust = newAdjust(); });
     if (skipped.length) toast(`읽지 못한 파일 ${skipped.length}개(HEIC 등): JPG로 바꿔 넣어 주세요. ` + skipped.slice(0, 3).join(', '));
     if (state.items.length && items.length && (items[0].image.width !== state.items[0].image.width || items[0].image.height !== state.items[0].image.height)) { toast('앞서 넣은 사진과 비율이 달라 넣지 못했습니다. 한 번에 넣어 주세요.'); return; }
-    // 번호는 여기서 한 번만 정하고 다시는 바뀌지 않는다. loadFiles가 이미 날짜순으로
-    // 돌려주므로 순서대로 최댓값+1부터 매기면 된다 (고정 번호 설계 §3).
-    const maxNo = state.items.reduce((m, it) => Math.max(m, it.no || 0), 0);
-    items.forEach((it, k) => { it.no = maxNo + 1 + k; });
-    state.items.push(...items); state.flags.push(...items.map(() => ({ warn: null })));
+    // 새 사진은 뒤에 붙이지 않고 날짜 자리로 끼워 넣는다(기존 순서는 그대로). 그래서 번호는
+    // 넣을 때마다 현재 순서대로 다시 매긴다 — 손으로 옮길 때는 여전히 고정 (원장 소감 09-22,
+    // 고정 번호 설계 §3 개정).
+    const fresh = new Set(items);
+    for (const it of items) {
+      const pos = insertIndex(state.items, it);
+      state.items.splice(pos, 0, it); state.flags.splice(pos, 0, { warn: null });
+    }
+    state.items.forEach((it, k) => { it.no = k + 1; });
     state.status = [];
     invalidateCheck();
     const active = activeItems();
@@ -719,8 +750,7 @@ async function addFiles(files) {
     const W = active[0].it.image.width;
     const res = await checkOrientation(cv, grays, W, (i, n) => progress('방향 검사 중', i, n));
     grays.forEach(g => g.delete()); grays = null;
-    // 새로 들어온 사진은 제외 표시가 없으므로 포함 목록의 뒤쪽 items.length장이 그대로 새 사진이다.
-    applyOrientation(res, active, active.length - items.length);
+    applyOrientation(res, active, fresh);
   } catch (e) {
     toast('오류: ' + (e.message || e));
   } finally {
@@ -738,13 +768,16 @@ async function addFiles(files) {
 // (= 기존 사진 과반이 "뒤집어라"로 나오면) 새 사진에는 부호를 되돌려 적용해야
 // 기존 사진들과 같은 방향이 된다.
 // res는 "포함된 사진"만큼 나오므로, 결과를 되돌릴 때는 원래 자리(x.i)에 적는다.
-function applyOrientation(res, active, prevCount) {
-  let flipVotes = 0;
-  for (let k = 0; k < prevCount; k++) if (res[k].flip) flipVotes++;
+// fresh = 이번에 새로 들어온 사진들. 기존 사진(fresh 아님)의 판정으로 전체가 뒤집힌 세트인지
+// 가늠하고, 새 사진에만 뒤집기·표시를 적용한다. (새 사진이 날짜 자리로 끼어들므로 자리로는
+// 구분할 수 없다.)
+function applyOrientation(res, active, fresh) {
+  let flipVotes = 0, prevCount = 0;
+  res.forEach((r, k) => { if (!fresh.has(active[k].it)) { prevCount++; if (r.flip) flipVotes++; } });
   const opposite = prevCount > 0 && flipVotes * 2 > prevCount;
   res.forEach((r, k) => {
     const { it, i } = active[k];
-    if (k < prevCount || it.userFlipped) return;
+    if (!fresh.has(it) || it.userFlipped) return;
     const doFlip = opposite ? !r.flip : r.flip;
     if (doFlip) { it.flipped = !it.flipped; rebuildImage(it); }
     state.flags[i] = { warn: doFlip ? 'flip' : (r.warn === 'other' ? 'other' : null) };
@@ -804,6 +837,7 @@ async function checkAngles() {
     setCheckNote(`각도 검사: ${flagged.size}장 표시 (중앙값 ${med.toFixed(2)})`);
     toast(flagged.size
       ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ✕(빼기)로 빼면 영상이 매끄러워집니다.`
+      : active.length < 3 ? '구도를 맞췄습니다. 사진을 누르면 크게 보며 손볼 수 있습니다.'
       : '모든 사진이 고르게 겹칩니다.');
   } catch (e) {
     toast(e.message === '취소' ? '취소했습니다.' : '오류: ' + (e.message || e));
