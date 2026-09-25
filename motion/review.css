@@ -20,6 +20,8 @@ button[hidden] { display:none!important; }
 #pairPlay[aria-pressed=true],#viewProtect[aria-pressed=true] { background:#243b31; border-color:#64b299; color:#bcebdc; }
 .badge.protected,.asset .tags .protected { color:#edcd82; }
 .asset .btns button { width:24px; height:24px; }
+.asset .btns .remove-photo { color:#b9c5d1; }
+.asset .btns .remove-photo:enabled:hover,.asset .btns .remove-photo:enabled:focus-visible { color:#ff8b8b; border-color:#ff8b8b; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
 
 /* 만드는 동안에만 사진 줄 위에 나타나는 진행 띠 (09-25 원장: 2안) */

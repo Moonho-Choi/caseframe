@@ -345,7 +345,7 @@ body.drag #drop{display:block}
   .inspector{width:auto;flex:none;max-height:none;overflow-y:visible;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
 }
 </style>
-<link rel="stylesheet" href="review.css?v=20260925-13">
+<link rel="stylesheet" href="review.css?v=20260926-1">
 </head>
 <body>
 <header class="topbar">
@@ -427,7 +427,7 @@ body.drag #drop{display:block}
         <button class="btn" id="viewPrev" title="앞 사진 (←)">◀ 이전</button>
         <button class="btn" id="viewNext" title="뒤 사진 (→)">다음 ▶</button>
         <button class="btn" id="viewFlip" title="좌우 뒤집기">⇄ 뒤집기</button>
-        <button class="btn" id="viewExclude" title="영상에서 빼기">✕ 빼기</button>
+        <button class="btn" id="viewExclude" title="영상에서 빼기">⊖ 영상에서 빼기</button>
         <button class="btn" id="viewFit" title="보기 확대를 원래대로 (0)" disabled>맞춤</button>
         <button class="btn primary" id="viewClose" title="닫기 (Esc · 사진 더블클릭)">닫기</button>
       </div>
@@ -498,7 +498,7 @@ body.drag #drop{display:block}
         촬영 팁: 카메라 각도와 거리를 매번 비슷하게 맞추면 영상이 훨씬 매끄럽습니다.<br>
         25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를, 구도만 빨리 확인하려면 "원본 겹치기"를 고르세요.<br>
         노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
-        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다. ☆ 꼭 포함으로 표시한 사진은 "튀는 사진 빼기"가 건드리지 않습니다.<br>
+        위 격자의 ⊖는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다. ☆ 꼭 포함으로 표시한 사진은 "튀는 사진 빼기"가 건드리지 않습니다.<br>
         사진을 클릭하면 크게 보면서 손으로 맞출 수 있습니다. 각도 검사를 한 뒤에 들어가면 자동으로 맞춘 구도 위에서 크기·회전·위치를 손봅니다(Esc나 더블클릭으로 닫기, ←/→ 이동).<br>
         크게 보기의 "연결 반복"은 앞뒤 사진 두 장을 계속 겹쳐 보여 줍니다. 구도가 어긋난 곳을 찾을 때 쓰세요.<br>
         맞춤 화면에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.<br>
@@ -512,7 +512,7 @@ body.drag #drop{display:block}
 <section class="filmstrip">
   <div class="film-info">
     <h2>가져온 사진</h2>
-    <p>끌어서 순서를 바꾸고, ✕로 목록에서 아예 없앱니다(뒤집기·빼기·꼭 포함은 위 격자에서). "날짜순 정렬"은 전체를 파일 이름의 날짜 순으로 다시 세우고 번호를 1부터 매깁니다.</p>
+    <p>끌어서 순서를 바꾸고, 휴지통 버튼으로 작업 목록에서 제거합니다. 원본 파일은 유지됩니다. 뒤집기·빼기·꼭 포함은 위 격자에서 합니다. "날짜순 정렬"은 전체를 파일 이름의 날짜 순으로 다시 세우고 번호를 1부터 매깁니다.</p>
     <div class="film-btns">
       <button class="btn" id="bOpen">폴더에서 선택</button>
       <button class="btn sort" id="sortBtn" disabled title="파일 이름의 날짜 순으로 다시 정렬하고 번호를 1부터 매깁니다">날짜순 정렬</button>
@@ -536,6 +536,6 @@ body.drag #drop{display:block}
 <div id="drop"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="../vendor/opencv.js" async onerror="var t=document.getElementById('toast');t.textContent='OpenCV 파일을 불러오지 못했습니다. 새로고침해 주세요.';t.className='show'"></script>
-<script type="module" src="js/main.js?v=20260925-13"></script>
+<script type="module" src="js/main.js?v=20260926-1"></script>
 </body>
 </html>

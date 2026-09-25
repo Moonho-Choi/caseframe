@@ -54,7 +54,7 @@ function toast(msg) {
 function locked() { return state.busy || state.loading; }
 
 // ── 제외한 사진 ───────────────────────────────────────────────
-// 빼기(✕)를 눌러도 목록에서 없애지 않고 excluded 표시만 붙인다. 그래야 그 자리에 그대로
+// 빼기(⊖)를 눌러도 목록에서 없애지 않고 excluded 표시만 붙인다. 그래야 그 자리에 그대로
 // 남아 넣기(↩)로 되돌릴 수 있다 (제외 설계 §2).
 // 영상 만들기·각도 검사·방향 검사는 이 "포함된 사진"만 받는다. 원래 자리(i)를 함께 들고
 // 다녀야 결과 배지(구도 실패·이웃과 많이 다름)가 엉뚱한 사진에 붙지 않는다.
@@ -417,7 +417,7 @@ function btnRow(i, lock, defs) {
 function excludeBtn(i, it) {
   return it.excluded
     ? ['↩', '영상에 다시 넣기', () => toggleExclude(i)]
-    : ['✕', '영상에서 빼기', () => toggleExclude(i)];
+    : ['⊖', '영상에서 빼기', () => toggleExclude(i)];
 }
 function renderGrid() {
   const g = $('grid'); g.innerHTML = '';
@@ -427,7 +427,7 @@ function renderGrid() {
     if (state.status[i] === 'fail') d.classList.add('fail');
     if (it.excluded) d.classList.add('excluded');
     d.title = `${it.name} — 누르면 크게 보기`;
-    // 사진을 누르면 크게 보기로 들어간다. 위에 얹힌 ◀▶⇄✕ 버튼은 btnRow에서
+    // 사진을 누르면 크게 보기로 들어간다. 위에 얹힌 ◀▶⇄⊖ 버튼은 btnRow에서
     // stopPropagation 하므로 여기까지 오지 않는다 (회전 설계 §2).
     d.onclick = () => openViewer(i);
     const img = document.createElement('img'); img.src = thumbOf(it); img.alt = it.name; d.appendChild(img);
@@ -488,9 +488,13 @@ function renderStrip() {
       d.appendChild(tags);
     }
     // 사진 줄은 순서 바꾸기와 목록에서 없애기만 맡는다. 뒤집기·빼기·꼭 포함은 격자에서 (09-25 원장 결정: 기능 분리).
-    d.appendChild(btnRow(i, lock, [
-      ['✕', '목록에서 없애기', () => removePhoto(i)],
-    ]));
+    const buttons = btnRow(i, lock, [
+      ['', '작업 목록에서 제거 · 원본 파일은 유지', () => removePhoto(i)],
+    ]);
+    const removeButton = buttons.querySelector('button');
+    removeButton.classList.add('remove-photo');
+    removeButton.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg>';
+    d.appendChild(buttons);
     wireDrag(d, i, lock);
     list.appendChild(d);
   });
@@ -632,7 +636,7 @@ function syncViewer() {
   syncZoomUi();
   $('viewPrev').disabled = viewIdx <= 0;
   $('viewNext').disabled = viewIdx >= state.items.length - 1;
-  $('viewExclude').textContent = it.excluded ? '↩ 넣기' : '✕ 빼기';
+  $('viewExclude').textContent = it.excluded ? '↩ 영상에 다시 넣기' : '⊖ 영상에서 빼기';
   $('viewExclude').title = it.excluded ? '영상에 다시 넣기' : '영상에서 빼기';
   // 구도 준비 안 됨 / 뺀 사진: 조절 줄 대신 안내를 보여 준다 (수동 맞춤 설계 §2).
   $('viewAdjust').hidden = mode !== 'adjust';
@@ -895,7 +899,7 @@ function flip(i) {
   invalidateCheck();
   leaveDone(); render();
 }
-// 빼기(✕)·넣기(↩). 목록에서 없애지 않으므로 items/flags/status의 길이·자리는 그대로다.
+// 빼기(⊖)·넣기(↩). 목록에서 없애지 않으므로 items/flags/status의 길이·자리는 그대로다.
 // 구도 맞추기 사슬이 달라지므로 이전 결과(구도 실패·각도 배지·캐시)는 모두 무효로 한다.
 function toggleExclude(i) {
   if (locked()) return;
@@ -1098,7 +1102,7 @@ async function pickSmoothPhotos() {
 
 // ── 각도 검사 ─────────────────────────────────────────────────
 // 각도가 크게 다른 사진이 섞이면 영상이 어른거린다. 자동으로 빼지는 않고, 이웃과 잘
-// 겹치지 않는 사진에 주황 배지를 붙여 원장이 ✕로 빼도록 한다 (각도 검사 설계 §1).
+// 겹치지 않는 사진에 주황 배지를 붙여 원장이 ⊖로 빼도록 한다 (각도 검사 설계 §1).
 // 만들기(make)와 같은 잠금·취소·진행·자원 정리 틀을 쓴다.
 async function checkAngles() {
   if (state.busy || state.loading) return;
@@ -1128,7 +1132,7 @@ async function checkAngles() {
     progress('완료');
     setCheckNote(`각도 검사: ${flagged.size}장 표시 (중앙값 ${med.toFixed(2)})`);
     toast(flagged.size
-      ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ✕(빼기)로 빼면 영상이 매끄러워집니다.`
+      ? `이웃과 많이 다른 사진 ${flagged.size}장을 표시했습니다. 각도가 다르거나 간격이 긴 사진입니다. ⊖(빼기)로 빼면 영상이 매끄러워집니다.`
       : active.length < 3 ? '구도를 맞췄습니다. 사진을 누르면 크게 보며 손볼 수 있습니다.'
       : '모든 사진이 고르게 겹칩니다.');
   } catch (e) {
@@ -1151,7 +1155,7 @@ async function make() {
   uiState = 'ready';                 // 이전 결과 화면은 내려 두고 격자를 보여 준다
   jobPct = 0; $('eta').textContent = '';
   // 잠금 표시는 여기서 바로 그려야 한다. 예전에는 chainTransforms가 끝난 뒤에야
-  // renderStrip()이 불려서, 제일 오래 걸리는 "구도 맞추는 중" 내내 ◀▶⇄✕ 버튼이
+  // renderStrip()이 불려서, 제일 오래 걸리는 "구도 맞추는 중" 내내 ◀▶⇄⊖ 버튼이
   // 그대로 눌렸다 — H1이 막으려던 바로 그 구간이 열려 있었다.
   render();
   const cancelled = () => state.cancelled;
