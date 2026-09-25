@@ -1,0 +1,60 @@
+/* 09-25 개선판 추가 요소의 모양만 담는다. 조절판·버튼 배치는 index.html의 원래 규칙(원장 v3 결정)을 따른다. */
+button:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+button[hidden] { display:none!important; }
+
+/* 조절판 추가 항목 */
+.boundary-toggle { display:flex; align-items:center; gap:8px; margin:12px 0 0; font-size:12px; color:var(--muted); }
+.boundary-toggle input { accent-color:var(--accent); }
+.result-status { margin-top:8px; font-size:12px; line-height:1.6; color:var(--muted); }
+.result-status.stale { color:#f0b47d; }
+.field select { max-width:185px; min-width:0; }
+
+/* 크게 보기: 겹침 비율·연결 반복·꼭 포함 */
+.view-cap { display:flex; align-items:center; justify-content:space-between; }
+.view-cap .eyebrow { font-size:11px; letter-spacing:.05em; color:var(--muted); display:block; margin-bottom:2px; }
+.adj-row { gap:10px; flex-wrap:wrap; }
+.blend-control { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+.blend-control input { width:90px; }
+.blend-control output { min-width:30px; }
+.pair-status { color:#b8c8d4; font-size:12px; text-align:center; min-height:18px; }
+#pairPlay[aria-pressed=true],#viewProtect[aria-pressed=true] { background:#243b31; border-color:#64b299; color:#bcebdc; }
+.badge.protected,.asset .tags .protected { color:#edcd82; }
+.asset .btns button { width:24px; height:24px; }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+
+/* 만드는 동안에만 사진 줄 위에 나타나는 진행 띠 (09-25 원장: 2안) */
+.jobbar { position:absolute; left:12px; right:12px; bottom:12px; z-index:6; display:flex; align-items:center; gap:14px; padding:9px 16px; background:#132a26f2; border:1px solid #2a5a4f; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+.jobbar[hidden] { display:none; }
+.jobbar .job-title { font-size:13px; font-weight:700; color:#bcebdc; white-space:nowrap; }
+.jobbar .job-stage { font-size:12px; color:#9fc4b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.jobbar .job-bar { flex:1; min-width:120px; height:6px; background:#0f1d1a; border-radius:3px; overflow:hidden; }
+.jobbar .job-bar i { display:block; height:100%; width:0; background:linear-gradient(90deg,#4ADBC3,#1E9B84); transition:width .18s; }
+.jobbar .job-meta { display:flex; gap:10px; font-size:12px; color:#9fc4b8; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.jobbar .job-meta b { color:#4ADBC3; }
+.jobbar #jobCancel { min-height:28px; height:28px; padding:0 14px; font-size:12px; background:transparent; border-color:#3f7a6b; color:#d3efe6; box-shadow:none; width:auto; }
+.jobbar #jobCancel:hover { background:#1b3a33; }
+@media(max-width:900px) { .jobbar { flex-wrap:wrap; padding:8px 12px; } .jobbar .job-bar { flex-basis:100%; order:5; } }
+
+/* 각도 검사 전에는 조절 줄 자리를 비워 두지 않고 사진을 크게 보인다. 검사 뒤에는
+   빼기/넣기 전환 때 사진 크기가 흔들리지 않도록 원래대로 자리를 지킨다(09-23). */
+#viewer.need .view-adjust[hidden] { display:none; }
+#viewer.need .pair-status[hidden] { display:none; }
+
+/* 오른쪽 아래(사진 줄 옆) 고정 칸: 만들기·저장 (09-25 원장) — 스크롤과 무관하게 늘 보인다 */
+.action-dock { align-self:center; display:flex; flex-direction:column; gap:8px; padding:8px 16px; border-left:1px solid var(--line); min-width:300px; }
+.action-dock .result-status { margin:0; font-size:12px; line-height:1.5; max-width:300px; }
+.action-row { display:flex; gap:8px; }
+.action-row .btn.make { flex:1.4; width:auto; min-height:48px; height:48px; font-size:15px; }
+.action-row .btn.save { flex:1; width:auto; min-height:48px; height:48px; }
+@media(max-width:900px) { .action-dock { border-left:0; padding:0 14px 12px; min-width:0; } }
+
+/* 맨 위 줄의 영상 글씨(제목·날짜) — 조절판에서 옮김 (09-25 원장) */
+.topbar { flex-wrap:wrap; row-gap:8px; }
+.caption-bar { display:flex; align-items:center; gap:14px; flex:1 1 360px; min-width:0; padding:0 14px; user-select:text; }
+.cap-field { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); min-width:0; }
+.cap-field span { flex:none; }
+.cap-field input[type=text] { flex:1; min-width:140px; max-width:360px; font-size:14px; padding:7px 10px; background:#0f1a22; border:1px solid #2c3946; border-radius:8px; color:var(--text); }
+.cap-field input[type=text]:focus { outline:none; border-color:var(--accent); }
+.cap-field select { font-size:13px; padding:6px 8px; }
+.caption-bar #labelNote { font-size:11px; color:var(--warn); }
+@media(max-width:900px) { .caption-bar { order:9; flex-basis:100%; padding:0; } .cap-field input[type=text] { max-width:none; } }

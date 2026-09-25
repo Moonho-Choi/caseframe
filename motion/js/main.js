@@ -1,5 +1,6 @@
 import { loadFiles, sortItems, monthsLabel, dateLabel, baseName } from './load.js';
-import { toGray, compose } from './features.js';
+import { settingIds, editMetadata, resultKey, validateProject, sourceKey } from './project.js?v=20260925-13';
+import { toGray, compose, invert } from './features.js';
 import { checkOrientation, flipImageData } from './orient.js';
 import { chainTransforms, warpImage, alignedSize, cropRect, adjustMatrix, DEFAULT_ADJUST, neighborScores, scoreVectors, pairScore } from './align.js';
 import { pickSmooth } from './select.js';
@@ -24,6 +25,11 @@ let rifeCache = null;
 // 이전 결과 영상의 object URL. 새 영상을 걸기 전에 풀어 주지 않으면 탭이 닫힐 때까지
 // 수십 MB짜리 Blob이 그대로 붙잡혀 있다.
 let lastUrl = null;
+let lastSignature = '';
+let referenceNo = '';
+const undoStack = [];
+let pairFrame = 0, pairStarted = 0, pairAlpha = null;
+let savedProjectSignature = '';
 let lastName = '';                 // 저장 버튼이 쓸 파일 이름
 let gpuLocked = false;             // WebGPU가 없어 품질을 "빠르게"로 고정한 경우
 let uiState = 'empty';             // empty | ready | busy | done | view(크게 보기)
@@ -105,9 +111,12 @@ function setState(s) {
   // 크게 보기는 영상 화면과 같은 자리를 쓴다 — 둘이 함께 보이는 일은 없다 (회전 설계 §2).
   $('viewer').hidden = s !== 'view';
   $('cancel').disabled = s !== 'busy';
+  $('jobOverlay').hidden = s !== 'busy';
+  if (s === 'busy') { $('jobTitle').textContent = JOB_TITLES[state.job] || '작업 중'; $('jobEta').textContent = ''; $('jobCancel').textContent = '취소'; }
   document.body.classList.toggle('locked', locked());
   syncSettings();
   if (s === 'view') syncViewer();
+  syncReview();
 }
 function syncState() {
   if (state.busy) { setState('busy'); return; }
@@ -121,7 +130,7 @@ function syncState() {
 function leaveDone() { if (uiState === 'done') { uiState = 'ready'; progress(''); } }
 function syncSettings() {
   const lock = locked();
-  $('quality').disabled = gpuLocked || lock;
+  $('quality').disabled = lock;
   $('step').disabled = lock;
   $('vshift').disabled = lock;
   $('hshift').disabled = lock;
@@ -171,7 +180,12 @@ function progress(stage, i, n) {
     if (state.job === 'check') $('checkBtn').textContent = `검사 중 ${jobPct}%`;
     else $('makeBtn').textContent = `만드는 중 ${jobPct}%`;
   }
+  // 가운데 판의 큰 진행 표시도 같은 값으로 맞춘다.
+  $('jobStage').textContent = $('stageText').textContent;
+  $('jobBarFill').style.width = $('bar').firstElementChild.style.width;
+  $('jobPct').textContent = `${slice ? jobPct : (n ? Math.round(100 * i / n) : 0)}%`;
 }
+const JOB_TITLES = { make: '영상을 만드는 중', check: '각도를 검사하는 중', pick: '튀는 사진을 고르는 중' };
 // 남은 시간 = (경과 시간 / 처리한 프레임) × 남은 프레임, 10초마다 갱신 (설계 §3)
 let runStart = 0, etaAt = 0;
 function etaReset() { runStart = etaAt = (typeof performance !== 'undefined' ? performance.now() : Date.now()); $('eta').textContent = ''; }
@@ -183,6 +197,7 @@ function etaUpdate(done, total) {
   const sec = Math.round((now - runStart) / done * (total - done) / 1000);
   const m = Math.floor(sec / 60), s = sec % 60;
   $('eta').textContent = m ? `남은 시간 약 ${m}분 ${s}초` : `남은 시간 약 ${s}초`;
+  $('jobEta').textContent = $('eta').textContent;
 }
 
 // ── 사진 한 장 다시 만들기 (뒤집기) ───────────────────────────
@@ -224,7 +239,12 @@ function shiftM(W, H) {
   const v = (+$('vshift').value || 0) / 100, h = (+$('hshift').value || 0) / 100;
   return new Float64Array([1, 0, h * W, 0, 1, v * H]);
 }
-function finalT(it, T) { return compose(shiftM(it.image.width, it.image.height), compose(adjustMatrix(it.adjust, it.image.width, it.image.height), T)); }
+function finalT(it, T) {
+  const ref = state.items.find(x => String(x.no) === referenceNo);
+  const base = ref?.T ? compose(invert(ref.T), T) : T;
+  return compose(shiftM(it.image.width, it.image.height), compose(adjustMatrix(it.adjust, it.image.width, it.image.height), base));
+}
+function outputMargin() { return (+$('crop').value || 0) / 100; }
 
 // ── 사진 그리기 (격자와 사진 줄은 같은 state.items에서 그린다) ──
 // 작은 그림은 만들 때마다 1280px 원본을 JPEG로 다시 짜내야 해서 40장이면 화살표 한
@@ -245,6 +265,7 @@ function captionOf(it) { return `${it.no} · ${it.date ? dateLabel(it.date) : ba
 // [CSS 이름, 글씨, 마우스를 올렸을 때 설명(없으면 빈 값)]. 여러 개가 함께 붙을 수 있다.
 function badgesFor(i) {
   const out = [], f = state.flags[i];
+  if (state.items[i].protected) out.push(['protected', '★ 꼭 포함', '자동 제외에서 보호됩니다']);
   if (state.items[i].excluded) out.push(['excluded', '제외', '영상에 넣지 않습니다. ↩로 다시 넣을 수 있습니다']);
   if (f && f.warn === 'flip') out.push(['flip', '자동 뒤집음', '']);
   else if (f && f.warn === 'other') out.push(['other', '다른 방향?', '']);
@@ -429,6 +450,7 @@ function renderGrid() {
     // 순서는 끌어서 바꾼다(◀▶ 버튼은 09-22 원장 요청으로 제거).
     d.appendChild(btnRow(i, lock, [
       ['⇄', '좌우 뒤집기', () => flip(i)],
+      [it.protected ? '★' : '☆', it.protected ? '꼭 포함 해제' : '꼭 포함', () => toggleProtect(i)],
       excludeBtn(i, it),
     ]));
     wireDrag(d, i, lock);
@@ -465,9 +487,9 @@ function renderStrip() {
       });
       d.appendChild(tags);
     }
+    // 사진 줄은 순서 바꾸기와 목록에서 없애기만 맡는다. 뒤집기·빼기·꼭 포함은 격자에서 (09-25 원장 결정: 기능 분리).
     d.appendChild(btnRow(i, lock, [
-      ['⇄', '좌우 뒤집기', () => flip(i)],
-      excludeBtn(i, it),
+      ['✕', '목록에서 없애기', () => removePhoto(i)],
     ]));
     wireDrag(d, i, lock);
     list.appendChild(d);
@@ -477,7 +499,7 @@ function renderStrip() {
   const cur = list.querySelector('.asset.current');
   if (cur) cur.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
-function render() { renderGrid(); renderStrip(); syncState(); }
+function render() { stopPair(); renderGrid(); renderStrip(); syncState(); }
 
 // ── 크게 보기 = 수동 맞춤 모드 ────────────────────────────────
 // 격자 카드를 누르면 가운데 판이 뷰어로 바뀐다. 자동 구도 맞추기가 어긋난 사진을
@@ -574,6 +596,7 @@ function setM(ctx, M) { ctx.setTransform(M[0], M[3], M[1], M[4], M[2], M[5]); }
 
 function openViewer(i) {
   if (locked() || !state.items[i]) return;
+  stopPair();
   if (uiState === 'done') leaveDone();      // 결과 영상 자리를 뷰어가 쓴다
   viewIdx = i;
   uiState = 'view';
@@ -581,16 +604,19 @@ function openViewer(i) {
   render();
 }
 function closeViewer() {
+  stopPair();
   if (uiState !== 'view') return;
   viewIdx = -1; viewSrc = null; viewOnionSrc = null;
   uiState = state.items.length ? 'ready' : 'empty';
 }
 // 사진을 전부 비울 때처럼 보던 대상이 사라지는 경우.
 function discardViewer() {
+  stopPair();
   viewIdx = -1; viewSrc = null; viewOnionSrc = null;
   if (uiState === 'view') uiState = 'ready';
 }
 function stepViewer(d) {
+  stopPair();
   const j = viewIdx + d;
   if (uiState !== 'view' || !state.items[j]) return;
   viewIdx = j;
@@ -610,11 +636,14 @@ function syncViewer() {
   $('viewExclude').title = it.excluded ? '영상에 다시 넣기' : '영상에서 빼기';
   // 구도 준비 안 됨 / 뺀 사진: 조절 줄 대신 안내를 보여 준다 (수동 맞춤 설계 §2).
   $('viewAdjust').hidden = mode !== 'adjust';
+  $('viewer').classList.toggle('need', mode === 'need');
   $('viewNeedCheck').hidden = mode === 'adjust';
   $('viewNeedText').textContent = mode === 'excluded'
     ? '영상에서 뺀 사진이라 구도를 맞추지 않습니다. ↩ 넣기로 되돌리면 맞출 수 있습니다.'
     : '먼저 각도 검사를 하면 앞뒤 사진과 맞출 수 있습니다';
   $('viewRunCheck').hidden = mode !== 'need';
+  // 검사 전·뺀 사진에는 연결 반복 안내 줄도 필요 없다 — 사진 아래에는 한 줄만 (09-25 원장).
+  $('pairStatus').hidden = mode !== 'adjust';
   $('viewCanvas').classList.toggle('adjust', mode === 'adjust');
   // 뺀 사진은 크게 보기에서도 어둡게 — 위 글씨만으로는 한눈에 안 보인다 (원장 소감 09-22).
   $('viewCanvas').classList.toggle('excluded', mode === 'excluded');
@@ -629,7 +658,10 @@ function syncViewer() {
   const sel = $('onionMode');
   sel.options[1].disabled = p < 0;
   sel.options[2].disabled = n < 0;
+  const ri = state.items.findIndex(x => String(x.no) === referenceNo);
+  sel.options[3].disabled = ri < 0 || ri === viewIdx;
   let eff = onionPref;
+  if (eff === 'reference' && (ri < 0 || ri === viewIdx)) eff = p >= 0 ? 'prev' : n >= 0 ? 'next' : 'none';
   if (eff === 'prev' && p < 0) eff = n >= 0 ? 'next' : 'none';
   if (eff === 'next' && n < 0) eff = p >= 0 ? 'prev' : 'none';
   sel.value = eff;
@@ -650,6 +682,7 @@ function syncViewer() {
 let onionPref = 'prev';
 function onionIdx() {
   const m = $('onionMode').value;
+  if (m === 'reference') { const r = state.items.findIndex(x => String(x.no) === referenceNo); return r === viewIdx ? -1 : r; }
   if (m === 'prev') return prevIncluded(viewIdx);
   if (m === 'next') return nextIncluded(viewIdx);
   return -1;
@@ -691,16 +724,26 @@ function drawView() {
     ctx.drawImage(viewOnionSrc.canvas, 0, 0);
   }
   setM(ctx, compose(V, finalT(it, T[viewIdx])));
-  ctx.globalAlpha = viewOnionSrc ? 0.5 : 1;
+  ctx.globalAlpha = viewOnionSrc ? (pairAlpha ?? (+$('onionAlpha').value / 100)) : 1;
   ctx.drawImage(viewSrc.canvas, 0, 0);
   ctx.globalAlpha = 1;
   // 잘라낼 창(영상에 들어갈 범위)을 청록 점선으로 (수동 맞춤 설계 §2)
-  const { x0, y0, cw, ch } = cropRect(W, H);
+  const { x0, y0, cw, ch } = cropRect(W, H, outputMargin());
   setM(ctx, V);
   const k = V[0] || 1;
   ctx.strokeStyle = '#35C7B0'; ctx.lineWidth = 1.5 / k; ctx.setLineDash([9 / k, 7 / k]);
   ctx.strokeRect(x0, y0, cw, ch);
   ctx.setLineDash([]);
+  // A transformed outline exposes the original boundary; it never changes image pixels.
+  if ($('boundaries').checked) {
+    ctx.strokeStyle = '#efad72'; ctx.lineWidth = 1.5 / k;
+    setM(ctx, compose(V, finalT(it, T[viewIdx]))); ctx.strokeRect(0, 0, W, H);
+    if (viewOnionSrc) {
+      const oi = viewOnionSrc.idx, other = state.items[oi];
+      setM(ctx, compose(V, finalT(other, T[oi])));
+      ctx.setLineDash([3 / k, 5 / k]); ctx.strokeRect(0, 0, W, H); ctx.setLineDash([]);
+    }
+  }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
@@ -716,6 +759,7 @@ function adjustChanged() {
   if (it) $('adjReset').disabled = !isAdjusted(it);
   invalidateScores();
   leaveDone();
+  syncReview();
   // 배지(수동 맞춤)는 격자·사진 줄을 다시 그려야 바뀐다. 슬라이더를 끄는 동안 40장을
   // 매번 다시 그리면 뚝뚝 끊기므로 손을 멈춘 뒤에 한 번만 그린다.
   clearTimeout(adjBadgeTimer);
@@ -748,6 +792,7 @@ function resetViewAdjust() {
   const it = state.items[viewIdx];
   if (!it || viewMode() !== 'adjust') return;
   if (!isAdjusted(it)) return;
+  rememberEdit();
   resetAdjust(it);
   $('adjScale').value = '1'; $('adjRot').value = '0';
   adjustChanged();
@@ -804,6 +849,7 @@ function moveTo(from, to) {
   // 순서가 바뀌면 뷰어가 보던 자리(viewIdx)가 다른 사진을 가리키게 된다. 먼저 나온다.
   closeViewer();
   if (to < 0 || to >= state.items.length || from === to) return;
+  rememberEdit();
   if (state.status.length === state.items.length) { const [st] = state.status.splice(from, 1); state.status.splice(to, 0, st); }
   else state.status = [];
   const [it] = state.items.splice(from, 1); state.items.splice(to, 0, it);
@@ -818,18 +864,22 @@ function sortByDate() {
   if (locked() || state.items.length < 2) return;
   const sorted = sortItems(state.items);
   if (sorted.every((it, k) => it === state.items[k])) { toast('이미 날짜순입니다.'); return; }
+  rememberEdit();
+  const reference = state.items.find(it => String(it.no) === referenceNo);
   closeViewer();
   const idx = sorted.map(it => state.items.indexOf(it));
   state.flags = idx.map(k => state.flags[k]);
   state.status = state.status.length === state.items.length ? idx.map(k => state.status[k]) : [];
   state.items = sorted;
   state.items.forEach((it, k) => { it.no = k + 1; });
+  referenceNo = reference ? String(reference.no) : '';
   invalidateScores();
   leaveDone(); render();
   toast('날짜순으로 정렬하고 번호를 1부터 다시 매겼습니다.');
 }
 function flip(i) {
   if (locked()) return;
+  rememberEdit();
   const it = state.items[i];
   // 뒤집기는 이제 표시만 바꾸는 깃발이다. 그림은 원본에서 다시 만든다 (회전 설계 §3).
   it.flipped = !it.flipped;
@@ -850,7 +900,10 @@ function flip(i) {
 function toggleExclude(i) {
   if (locked()) return;
   const it = state.items[i];
+  if (it.protected && !it.excluded) { toast('꼭 포함을 먼저 해제해 주세요.'); return; }
+  rememberEdit();
   it.excluded = !it.excluded;
+  invalidateScores();
   it.autoExcluded = false;          // 손으로 정한 것은 '튀는 사진 빼기'가 다시 건드리지 않는다
   // 구도 결과(캐시)·구도 실패 표시·각도 배지는 그대로 둔다. 뺀 사진까지 한 번에 맞춰 두었으므로
   // 다시 넣어도 바로 쓸 수 있고, "이웃과 많이 다름" 표시는 빼는 동안 계속 보여야 한다.
@@ -864,8 +917,29 @@ function toggleExclude(i) {
   requestAnimationFrame(() => requestAnimationFrame(() => els.forEach(el => el.classList.remove(cls))));
 }
 
+// 목록에서 아예 없앤다(빼기와 다르다). 구도 변환은 사진마다 붙어 있으므로(it.T) 남은 사진의
+// 구도는 그대로 쓰고, 이웃 점수만 다시 낸다. 되돌리기로 살릴 수 있다.
+function removePhoto(i) {
+  if (locked() || !state.items[i]) return;
+  rememberEdit();
+  const it = state.items[i];
+  if (uiState === 'view') closeViewer();
+  const aligned = !!state.cache && state.cache.key === cacheKey();
+  state.items.splice(i, 1);
+  if (state.flags.length > i) state.flags.splice(i, 1);
+  if (state.status.length > i) state.status.splice(i, 1);
+  if (String(it.no) === referenceNo) referenceNo = '';
+  state.cache = aligned && state.items.length ? { key: cacheKey() } : null;
+  invalidateScores();
+  leaveDone();
+  if (!state.items.length) { $('resultInfo').textContent = '아직 만든 영상이 없습니다.'; setCheckNote(''); }
+  render();
+  toast(`${captionOf(it)} 사진을 목록에서 없앴습니다. 실행 취소로 되살릴 수 있습니다.`);
+}
+
 async function addFiles(files) {
   if (locked()) { toast('영상을 만드는 중에는 사진을 넣을 수 없습니다. 취소 후 넣어 주세요.'); return; }
+  if (state.items.length) rememberEdit();   // 사진이 없던 상태는 되돌리기 대상이 아니다(한 번에 전부 사라지는 사고 방지)
   closeViewer(); state.loading = true; leaveDone(); render();
   let grays = null;
   try {
@@ -984,7 +1058,7 @@ async function pickSmoothPhotos() {
     state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
     progress('겹침 점수 계산 중');
-    const warped = cand.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
+    const warped = cand.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H, outputMargin()));
     const V = await scoreVectors(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const score = (a, b) => pairScore(V[a], V[b]);
     // 문턱 = 이웃 점수 중앙값의 80%. "너무 벗어나는 사진만" 빼자는 원장 결정(09-23)으로 중앙값
@@ -992,7 +1066,9 @@ async function pickSmoothPhotos() {
     const consecutive = [];
     for (let k = 0; k + 1 < V.length; k++) consecutive.push(score(k, k + 1));
     const thr = PICK_RATIO * median(consecutive);
-    const keptIdx = pickSmooth(cand.length, score, thr, 3);
+    rememberEdit(true);
+    const protectedIdx = new Set(cand.map((x, k) => x.it.protected ? k : -1).filter(k => k >= 0));
+    const keptIdx = pickSmooth(cand.length, score, thr, 3, protectedIdx);
     const kept = new Set(keptIdx);
     let removed = 0;
     cand.forEach(({ it }, k) => { const keep = kept.has(k); if (!keep) removed++; it.excluded = !keep; it.autoExcluded = !keep; });
@@ -1046,7 +1122,7 @@ async function checkAngles() {
     progress('겹침 점수 계산 중');
     // 점수는 수동 맞춤까지 반영한 최종 변환으로 낸다 — 손질한 사진은 이웃과 더 잘
     // 겹쳐야 하고, 그 결과가 배지에 그대로 보여야 한다 (수동 맞춤 설계 §1).
-    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
+    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H, outputMargin()));
     const scores = await neighborScores(cv, warped, (i, n) => progress('겹침 점수 계산 중', i, n), cancelled);
     const { med, flagged } = applyScores(active, scores);
     progress('완료');
@@ -1087,19 +1163,21 @@ async function make() {
     // 제일 오래 걸리는 단계라, 검사 뒤 바로 만들면 그만큼 시간이 통째로 빠진다 (설계 §4).
     const { T, status } = await ensureAlignment(cv, W, H, cancelled);
     // 기준 틀 사진은 만들 때마다 새로 만든다 — 수동 맞춤이 바뀌어도 늘 지금 값대로 나온다.
-    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H));
+    const warped = active.map(({ it, i }) => warpImage(cv, it.image, finalT(it, T[i]), W, H, outputMargin()));
     state.status = status.slice(); render();
     if (cancelled()) throw new Error('취소');
     progress('밝기·색 맞추는 중');
     // matchColors는 새 배열·새 사진을 돌려준다(warped는 여기서 역할이 끝난다).
     const aligned = await matchColors(warped, (i, n) => progress('밝기·색 맞추는 중', i, n), cancelled);
-    const { cw, ch } = alignedSize(W, H);
+    const { cw, ch } = alignedSize(W, H, outputMargin());
     const stepSec = +$('step').value, { N, fps } = planTiming(stepSec);
     const quality = $('quality').value;
-    progress('인공지능 모델 준비 중');
-    const ort = await import('../../vendor/ort/ort.webgpu.min.mjs'); ort.env.wasm.wasmPaths = '/vendor/ort/';
-    if (!rifeCache) rifeCache = await Rife.create(ort, '/motion/models/rife_fp32.onnx');
-    rife = rifeCache;
+    progress(quality === 'none' ? '원본 연결 준비 중' : '인공지능 모델 준비 중');
+    if (quality !== 'none') {
+      const ort = await import('../../vendor/ort/ort.webgpu.min.mjs'); ort.env.wasm.wasmPaths = '/vendor/ort/';
+      if (!rifeCache) rifeCache = await Rife.create(ort, '/motion/models/rife_fp32.onnx');
+      rife = rifeCache;
+    }
     const aiLevels = rife ? aiLevelsFor(quality, N) : 0;
     if (!pickEncoder()) throw new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬이나 엣지를 써 주세요.');
     const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch; const ctx = canvas.getContext('2d');
@@ -1150,6 +1228,7 @@ async function make() {
     // 인공지능이 돌지 않아 단순 겹치기로 만들었으면 파일 이름도 "단순"으로 남긴다.
     const usedQuality = (!rife || rife.failed) ? 'none' : quality;
     lastName = outputName(active[0].it.name, 'mp4', usedQuality, new Date(), title);
+    lastSignature = currentResultKey();
     showResult(total / fps, cw, ch, blob.size, lastName, usedQuality === 'none');
     $('eta').textContent = '';
     uiState = 'done'; progress('완료', total, total);
@@ -1179,7 +1258,7 @@ function showResult(sec, w, h, bytes, name, simple) {
     const b = document.createElement('b'); b.textContent = v; d.appendChild(b);
     box.appendChild(d);
   }
-  if (simple) {
+  if (simple && $('quality').value !== 'none') {
     const d = document.createElement('div');
     d.textContent = '이 컴퓨터에서는 빠른 방식(단순 겹치기)으로 만들었습니다.';
     box.appendChild(d);
@@ -1188,15 +1267,18 @@ function showResult(sec, w, h, bytes, name, simple) {
 
 // ── 저장·다시 만들기·비우기 ────────────────────────────────────
 function save() {
+  if (locked() || !lastUrl || lastSignature !== currentResultKey()) { toast('수정 사항을 반영해 영상을 다시 만들어 주세요.'); return; }
   if (!lastUrl || !lastName) { toast('아직 저장할 영상이 없습니다.'); return; }
   const a = document.createElement('a');
   a.href = lastUrl; a.download = lastName; a.style.display = 'none';
   document.body.appendChild(a); a.click(); a.remove();
-  toast('저장됨: ' + lastName);
+  toast('다운로드를 시작했습니다: ' + lastName);
 }
 function remake() { $('video').pause(); uiState = 'ready'; progress(''); render(); }
 function clearAll() {
   if (locked()) return;
+  rememberEdit();
+  referenceNo = '';
   discardViewer();                   // 사진이 사라지므로 조절 중이던 값은 버린다
   state.items = []; state.flags = []; state.status = [];
   // 사진이 하나도 없으니 "다시 검사하세요"가 아니라 결과 줄까지 통째로 비운다.
@@ -1268,6 +1350,7 @@ $('saveBtn2').onclick = save;
 $('remakeBtn').onclick = remake;
 $('clearBtn').onclick = clearAll;
 $('cancel').onclick = () => { state.cancelled = true; };
+$('jobCancel').onclick = () => { state.cancelled = true; $('jobCancel').textContent = '취소하는 중…'; };
 $('bOpen').onclick = () => { if (!locked()) $('file').click(); };
 $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('emptySheet').onclick = () => { if (!locked()) $('file').click(); };
@@ -1284,11 +1367,11 @@ $('sortBtn').onclick = sortByDate;
 $('viewRunCheck').onclick = runCheckFromViewer;
 // 슬라이더는 사진 데이터를 건드리지 않고 캔버스만 다시 그린다 — 끌면 바로 따라온다.
 $('adjScale').oninput = () => setAdjustScale(+$('adjScale').value);
-$('adjScaleDown').onclick = () => setAdjustScale(+$('adjScale').value - 0.01);
-$('adjScaleUp').onclick = () => setAdjustScale(+$('adjScale').value + 0.01);
+$('adjScaleDown').onclick = () => { rememberEdit(); setAdjustScale(+$('adjScale').value - 0.01); };
+$('adjScaleUp').onclick = () => { rememberEdit(); setAdjustScale(+$('adjScale').value + 0.01); };
 $('adjRot').oninput = () => setAdjustRotation(+$('adjRot').value);
 $('adjReset').onclick = resetViewAdjust;
-$('onionMode').onchange = () => { onionPref = $('onionMode').value; if (uiState === 'view') syncViewer(); };
+$('onionMode').onchange = () => { stopPair(); onionPref = $('onionMode').value; if (uiState === 'view') syncViewer(); syncReview(); };
 $('viewFit').onclick = () => { if (uiState === 'view') fitView(); };
 // 판 크기가 바뀌면 캔버스도 다시 맞춘다(창 크기 조절·전체화면).
 window.addEventListener('resize', () => { if (uiState === 'view') drawView(); });
@@ -1310,6 +1393,7 @@ window.addEventListener('resize', () => { if (uiState === 'view') drawView(); })
     if (uiState !== 'view' || e.button) return;
     if (vc.focus) vc.focus();        // 화살표 키로 1px씩 미는 조작을 이어서 할 수 있게
     if (viewMode() !== 'adjust') return;
+    stopPair(); rememberEdit();
     dragging = true; dragLast = { x: e.clientX, y: e.clientY };
     vc.classList.add('drag');
     // 포인터를 잡아 두면 캔버스 밖으로 나가도 끌기가 이어지고 손을 뗀 것도 놓치지 않는다.
@@ -1364,6 +1448,7 @@ window.addEventListener('keydown', e => {
   // 사진을 1px(Shift 10px)씩 밀고, 그 밖에서는 ←/→로 앞뒤 사진을 넘긴다 (수동 맞춤 설계 §2).
   const onPhoto = uiState === 'view' && t === $('viewCanvas');
   if (onPhoto && viewMode() === 'adjust' && e.key.startsWith('Arrow')) {
+    rememberEdit();
     const d = e.shiftKey ? 10 : 1;
     e.preventDefault();
     if (e.key === 'ArrowLeft') moveAdjust(-d, 0);
@@ -1385,10 +1470,206 @@ window.addEventListener('keydown', e => {
 // 품질을 "빠르게"로 고정하고 이유를 그 자리에 적어 둔다.
 if (typeof navigator === 'undefined' || !navigator.gpu) {
   gpuLocked = true;
-  $('quality').value = 'fast';
-  $('gpunote').textContent = '이 컴퓨터는 인공지능 그림을 쓸 수 없어 "빠르게"로 고정됩니다.';
+  $('quality').value = 'none';
+  [...$('quality').options].forEach(o => { o.disabled = o.value !== 'none'; });
+  $('gpunote').textContent = '이 컴퓨터에서는 원본 겹치기로 제작합니다.';
   $('gpunote').hidden = false;
 }
+
+// ── Review workspace: result freshness, pair inspection, undo, portable projects ──
+function settingsNow() { return Object.fromEntries(settingIds.map(id => [id, $(id).value])); }
+function currentResultKey() { return resultKey(state.items, settingsNow(), referenceNo); }
+function projectKey() { return JSON.stringify({ items: state.items.map(it => ({ ...editMetadata(it), source:sourceKey(it) })), settings: settingsNow(), reference: referenceNo }); }
+function snapshot() {
+  return { items: state.items.map(it => ({ ...editMetadata(it), original: it.original })),
+    flags: state.flags.map(f => ({ ...f })), settings: settingsNow(), reference: referenceNo,
+    aligned: !!state.cache && state.cache.key === cacheKey() };
+}
+function rememberEdit(duringJob = false) {
+  if (locked() && !duringJob) return;
+  const snap = snapshot();
+  const key = projectKey();
+  if (undoStack.at(-1)?.key === key) return;
+  undoStack.push({ snap, key });
+  if (undoStack.length > 20) undoStack.shift();
+}
+function applySnapshot(snap) {
+  const wasView = uiState === 'view' ? viewIdx : -1, wasDone = uiState === 'done';
+  discardViewer();
+  state.items = snap.items.map(m => {
+    const it = { ...m, date: m.date === null ? null : new Date(m.date),
+      adjust: { ...m.adjust }, T: m.T ? new Float64Array(m.T) : null, thumb: null };
+    rebuildImage(it); return it;
+  });
+  state.flags = snap.flags || state.items.map(() => ({ warn: null }));
+  state.status = state.items.map(it => it.status);
+  for (const id of settingIds) $(id).value = snap.settings[id];
+  if (gpuLocked) $('quality').value = 'none';
+  referenceNo = snap.reference;
+  state.cache = snap.aligned && state.items.every(it => it.T) ? { key: cacheKey() } : null;
+  state.angle = null; setCheckNote('');
+  $('step').oninput(); $('hshift').oninput(); $('vshift').oninput();
+  uiState = state.items.length ? 'ready' : 'empty';
+  // 보던 자리를 지킨다: 크게 보기 중이었으면 같은 번호로, 결과 화면이었으면 결과로.
+  if (wasView >= 0 && state.items[wasView]) { render(); openViewer(wasView); return; }
+  if (wasDone && lastUrl && state.items.length) uiState = 'done';
+  render();
+}
+function undoEdit() {
+  if (locked()) return;
+  // Ignore duplicate/no-op snapshots without erasing an actual older edit.
+  let entry;
+  do { entry = undoStack.pop(); } while (entry && entry.key === projectKey());
+  if (!entry) { syncReview(); return; }
+  applySnapshot(entry.snap); toast('마지막 편집을 되돌렸습니다');
+}
+function syncReview() {
+  const lock = locked(), count = activeCount();
+  const stale = !!lastUrl && lastSignature !== currentResultKey();
+  const fresh = !!lastUrl && !stale;
+  if (!lock) {
+    const checked = !!state.angle && !!state.cache && state.cache.key === cacheKey();
+    $('checkBtn').disabled = count < MIN_CHECK || checked;
+    $('checkBtn').textContent = checked ? '검사 완료' : '각도 검사';
+  }
+  for (const id of ['saveBtn','saveBtn2']) $(id).disabled = lock || !fresh;
+  $('resultStatus').textContent = lock ? (state.loading ? '사진을 준비하고 있습니다' : '작업 중 · 취소하면 편집으로 돌아갑니다')
+    : stale ? '수정 사항 미반영 · 영상을 다시 만들어 주세요'
+    : fresh ? '현재 편집 내용으로 만든 영상 · 저장할 수 있습니다'
+    : count < 2 ? '사진을 2장 이상 넣어 주세요' : '구도와 연결을 확인한 뒤 영상을 만드세요';
+  $('resultStatus').classList.toggle('stale', stale);
+  if (!lock) $('makeBtn').textContent = lastUrl ? '다시 만들기' : '영상 만들기';
+  $('undoBtn').disabled = lock || !undoStack.length;
+  $('projectSave').disabled = lock || !state.items.length;
+  $('projectOpen').disabled = lock;
+  for (const id of ['reference','crop']) $(id).disabled = lock || !state.items.length;
+  $('cropValue').textContent = `${$('crop').value}%`;
+  // Rebuild options only when membership or names change; never interrupt an open menu.
+  const ref = $('reference');
+  const optionKey = state.items.map(it => `${it.no}:${it.name}`).join('|');
+  if (ref.dataset.options !== optionKey) {
+    ref.replaceChildren(new Option('자동 중심', ''), ...state.items.map(it => new Option(captionOf(it), String(it.no))));
+    ref.dataset.options = optionKey;
+  }
+  ref.value = referenceNo;
+  const it = state.items[viewIdx];
+  $('viewProtect').disabled = lock || !it;
+  $('viewProtect').textContent = it?.protected ? '★ 꼭 포함 중' : '☆ 꼭 포함';
+  $('viewProtect').setAttribute('aria-pressed', String(!!it?.protected));
+  $('pairPlay').disabled = lock || uiState !== 'view' || viewMode() !== 'adjust' || !viewOnionSrc;
+  $('onionAlpha').disabled = !viewOnionSrc;
+  $('onionAlphaValue').textContent = `${$('onionAlpha').value}%`;
+}
+function toggleProtect(i) {
+  if (locked() || !state.items[i]) return;
+  rememberEdit();
+  const it = state.items[i]; it.protected = !it.protected;
+  if (it.protected && it.excluded) { it.excluded = false; it.autoExcluded = false; invalidateScores(); }
+  render();
+}
+function stopPair() {
+  if (pairFrame) cancelAnimationFrame(pairFrame);
+  pairFrame = 0; pairAlpha = null;
+  $('pairPlay').textContent = '▶ 연결 반복';
+  $('pairPlay').setAttribute('aria-pressed', 'false');
+  $('pairStatus').textContent = '원본 두 장의 연결을 확인합니다. AI 보간 영상은 전체 제작 후 확인하세요.';
+}
+function playPair() {
+  if (pairFrame) { stopPair(); drawView(); return; }
+  if (uiState !== 'view' || !viewOnionSrc || viewMode() !== 'adjust') return;
+  pairStarted = performance.now();
+  $('pairPlay').textContent = 'Ⅱ 반복 멈추기'; $('pairPlay').setAttribute('aria-pressed', 'true');
+  $('pairStatus').textContent = `${captionOf(state.items[viewOnionSrc.idx])} ↔ ${captionOf(state.items[viewIdx])} · 원본 연결 확인`;
+  const loop = now => {
+    if (uiState !== 'view' || !viewOnionSrc || locked()) { stopPair(); return; }
+    const seconds = +$('step').value * 1000, hold = 600, cycle = (seconds + hold) * 2;
+    const t = (now - pairStarted) % cycle;
+    const forward = t < seconds + hold;
+    const phase = forward ? t : t - seconds - hold;
+    const a = Math.min(1, Math.max(0, (phase - hold) / seconds));
+    pairAlpha = $('pairMode').value === 'blink' ? (forward ? 0 : 1) : (forward ? a : 1 - a);
+    drawView(); pairFrame = requestAnimationFrame(loop);
+  };
+  pairFrame = requestAnimationFrame(loop);
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+async function saveProject() {
+  if (locked() || !state.items.length) return;
+  stopPair(); state.loading = true; render();
+  try {
+    const items = [];
+    for (const it of state.items) {
+      items.push({ ...editMetadata(it), png: canvasOf(it.original).toDataURL('image/png') });
+      await new Promise(r => setTimeout(r, 0));
+    }
+    const project = { format:'caseframe-motion', version:1, reference:referenceNo, settings:settingsNow(), items };
+    downloadBlob(new Blob([JSON.stringify(project)], { type:'application/json' }), `CaseFrame-작업-${dateLabel(new Date())}.caseframe`);
+    savedProjectSignature = projectKey();
+    toast('사진과 편집값을 담은 작업 파일 다운로드를 시작했습니다.');
+  } catch (e) { toast('작업 저장 실패: ' + e.message); }
+  finally { state.loading = false; render(); }
+}
+async function openProject(file) {
+  if (!file || locked()) return;
+  if (file.size > 350 * 1024 * 1024) { toast('작업 파일이 너무 큽니다 (최대 350 MB).'); return; }
+  stopPair(); state.loading = true; render();
+  try {
+    const p = validateProject(JSON.parse(await file.text()));
+    const items = [];
+    let W, H;
+    for (const m of p.items) {
+      const bytes = Uint8Array.from(atob(m.png.split(',')[1]), c => c.charCodeAt(0));
+      // Validate PNG dimensions before asking the decoder to allocate pixels.
+      if (bytes.length < 24 || bytes[0] !== 137 || bytes[1] !== 80 || bytes[2] !== 78 || bytes[3] !== 71) throw new Error('사진 데이터가 손상되었습니다');
+      const dv = new DataView(bytes.buffer), w = dv.getUint32(16), h = dv.getUint32(20);
+      if (w !== 1280 || h < 16 || h > 8192 || (W && (W !== w || H !== h))) throw new Error('사진 크기가 올바르지 않습니다');
+      W = w; H = h;
+      const bitmap = await createImageBitmap(new Blob([bytes], {type:'image/png'}));
+      try {
+        if (bitmap.width !== W || bitmap.height !== H) throw new Error('사진 크기가 일치하지 않습니다');
+        const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(bitmap, 0, 0);
+        const {png, ...meta} = m;
+        items.push({ ...meta, original:ctx.getImageData(0, 0, W, H) });
+      } finally { bitmap.close(); }
+    }
+    // Do not replace the current work until every photo has decoded successfully.
+    rememberEdit(true);
+    state.loading = false;
+    applySnapshot({ items, reference:p.reference, settings:p.settings, aligned:items.every(it => it.T) });
+    savedProjectSignature = projectKey(); toast('작업을 열었습니다. 사진과 맞춤값을 복원했습니다.');
+  } catch (e) { toast('작업을 열지 못했습니다: ' + e.message); }
+  finally { state.loading = false; render(); }
+}
+$('undoBtn').onclick = undoEdit;
+$('projectSave').onclick = saveProject;
+$('projectOpen').onclick = () => { if (!locked()) $('projectFile').click(); };
+$('projectFile').onchange = e => { openProject(e.target.files[0]); e.target.value = ''; };
+$('viewProtect').onclick = () => toggleProtect(viewIdx);
+$('reference').onchange = () => { referenceNo = $('reference').value; stopPair(); invalidateScores(); if (uiState === 'view') syncViewer(); syncReview(); };
+$('crop').oninput = () => { invalidateScores(); if (uiState === 'view') drawView(); syncReview(); };
+$('boundaries').onchange = () => { if (uiState === 'view') drawView(); };
+$('onionAlpha').oninput = () => { stopPair(); drawView(); syncReview(); };
+$('pairPlay').onclick = playPair;
+$('pairMode').onchange = () => { if (pairFrame) { stopPair(); playPair(); } };
+// Save one history entry per pointer/keyboard editing session, including range drags.
+for (const id of [...settingIds, 'reference','adjScale','adjRot']) {
+  const input = $(id);
+  for (const event of ['focusin','pointerdown']) input.addEventListener(event, () => { stopPair(); rememberEdit(); });
+  input.addEventListener('input', () => { if (id !== 'reference') syncReview(); });
+  input.addEventListener('change', syncReview);
+}
+window.addEventListener('keydown', e => {
+  const tag = e.target?.tagName;
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !['INPUT','TEXTAREA'].includes(tag)) { e.preventDefault(); undoEdit(); }
+});
+// 영상을 만드는 중에만 탭 닫기를 한 번 묻는다(편집 중에는 묻지 않는다 — 09-25 원장 검토).
+window.addEventListener('beforeunload', e => {
+  if (state.busy) { e.preventDefault(); e.returnValue = ''; }
+});
 
 syncFsLabel();
 render();

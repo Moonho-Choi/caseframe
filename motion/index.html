@@ -345,6 +345,7 @@ body.drag #drop{display:block}
   .inspector{width:auto;flex:none;max-height:none;overflow-y:visible;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
 }
 </style>
+<link rel="stylesheet" href="review.css?v=20260925-13">
 </head>
 <body>
 <header class="topbar">
@@ -366,7 +367,13 @@ body.drag #drop{display:block}
   </div>
   <span class="sep"></span>
   <div class="privacy-note" title="모든 사진은 사용하시는 컴퓨터 안에서만 처리되며, 인터넷이나 외부 서버로 전송되지 않습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 이 컴퓨터 안에서만 처리됩니다</span></div>
+  <div class="caption-bar" id="captionBar">
+    <label class="cap-field" title="영상 왼쪽 위에 새겨집니다. 만든 뒤에 바꾸면 '다시 만들기'가 필요합니다."><span>제목</span><input id="title" type="text" maxlength="40" placeholder="예: 홍길동 · 상악 배열" autocomplete="off"></label>
+    <label class="cap-field" title="영상 오른쪽 위에 새겨집니다. 경과 기간은 첫 사진 기준 개월 수입니다."><span>날짜</span><select id="labelMode"><option value="date">날짜</option><option value="months">경과 기간</option><option value="none">없음</option></select></label>
+    <span id="labelNote" hidden></span>
+  </div>
   <span class="spacer"></span>
+  <button class="btn" id="undoBtn" disabled title="마지막 편집 되돌리기 (⌘/Ctrl Z)">↶ 실행 취소</button>
   <span id="gpunote" hidden></span>
   <button class="btn" id="bFs" title="전체화면 (F)">전체화면</button>
 </header>
@@ -377,14 +384,14 @@ body.drag #drop{display:block}
     <div class="sheet-empty" id="emptySheet" role="button" tabindex="0" title="사진 고르기">
       <div class="slot">
         <div>
-          <b>같은 방향 교정 사진을 아래 칸이나 이 화면에 끌어다 놓으세요</b>
-          <span>JPG·PNG 최대 40장. 파일 이름의 날짜(20230724)로 자동 정렬됩니다.<br>
+          <b>사진을 놓으면, 치료의 흐름이 시작됩니다</b>
+          <span>같은 방향으로 촬영한 사진 · JPG·PNG 최대 40장. 파일 이름의 날짜(20230724)로 자동 정렬됩니다.<br>
           영상 만들기는 크롬·엣지에서만 됩니다. 사진은 이 컴퓨터 밖으로 나가지 않습니다.</span>
         </div>
       </div>
     </div>
     <div id="viewer" hidden>
-      <div class="view-cap"><span id="viewCap"></span><span id="viewZoom"></span></div>
+      <div class="view-cap"><div><span class="eyebrow">선택 사진 맞춤</span><span id="viewCap"></span><span id="viewZoom"></span></div><button class="btn" id="viewProtect" aria-pressed="false">☆ 꼭 포함</button></div>
       <div class="view-stage" id="viewStage"><canvas id="viewCanvas" tabindex="0"></canvas><button class="btn restore-big" id="viewRestore" type="button" hidden title="영상에 다시 넣기">↩ 다시 넣기</button></div>
       <div class="view-need" id="viewNeedCheck" hidden>
         <span id="viewNeedText">먼저 각도 검사를 하면 앞뒤 사진과 맞출 수 있습니다</span>
@@ -406,12 +413,16 @@ body.drag #drop{display:block}
           <select id="onionMode">
             <option value="none">없음</option>
             <option value="prev" selected>앞 사진</option>
-            <option value="next">뒤 사진</option>
+            <option value="next">뒤 사진</option><option value="reference">기준 사진</option>
           </select>
+          <label class="blend-control">현재 사진 <input type="range" id="onionAlpha" min="0" max="100" value="50" aria-label="현재 사진 겹침 비율"><output id="onionAlphaValue">50%</output></label>
+          <button class="btn" id="pairPlay" disabled>▶ 연결 반복</button>
+          <select id="pairMode" aria-label="연결 확인 방식"><option value="fade">원본 겹치기</option><option value="blink">원본 번갈아 보기</option></select>
           <button class="btn" id="adjReset" title="이 사진의 수동 맞춤을 처음으로 되돌립니다">되돌리기</button>
           <span class="view-hint">사진을 끌면 이동(화살표 키 1px · Shift 10px) · 휠은 보기 확대(최대 4배) · 청록 점선 안쪽만 영상에 들어갑니다</span>
         </div>
       </div>
+      <div class="pair-status" id="pairStatus" aria-live="polite">원본 두 장의 연결을 확인합니다. AI 보간 영상은 전체 제작 후 확인하세요.</div>
       <div class="view-actions">
         <button class="btn" id="viewPrev" title="앞 사진 (←)">◀ 이전</button>
         <button class="btn" id="viewNext" title="뒤 사진 (→)">다음 ▶</button>
@@ -421,6 +432,13 @@ body.drag #drop{display:block}
         <button class="btn primary" id="viewClose" title="닫기 (Esc · 사진 더블클릭)">닫기</button>
       </div>
     </div>
+    <section id="jobOverlay" class="jobbar" hidden aria-live="polite">
+      <span class="job-title" id="jobTitle">영상을 만드는 중</span>
+      <span class="job-stage" id="jobStage"></span>
+      <div class="job-bar"><i id="jobBarFill"></i></div>
+      <span class="job-meta"><b id="jobPct">0%</b><span id="jobEta"></span></span>
+      <button class="btn" id="jobCancel">취소</button>
+    </section>
     <div id="videoWrap" hidden>
       <video id="video" controls playsinline></video>
       <div class="video-actions">
@@ -431,13 +449,14 @@ body.drag #drop{display:block}
     </div>
   </section>
 
-  <aside class="inspector">
+  <aside class="inspector" aria-label="영상 편집 설정">
     <div class="control-section">
       <h3>설정</h3>
-      <label class="field"><span>품질</span>
-        <select id="quality">
-          <option value="high">고품질</option>
-          <option value="fast">빠르게</option>
+      <label class="field"><span>전환 방식</span>
+        <select id="quality" title="AI 보간은 사진 사이를 인공지능이 그려 넣어 부드럽게 잇습니다. 원본 겹치기는 AI 없이 두 사진을 서서히 겹쳐 빠르게 만듭니다.">
+          <option value="high">고품질 (AI)</option>
+          <option value="fast">빠르게 (AI)</option>
+          <option value="none">원본 겹치기 (AI 없음)</option>
         </select>
       </label>
       <div class="control-title" id="stepLabel"><span>한 단계 시간</span><span class="value" id="stepv">2초</span></div>
@@ -446,54 +465,45 @@ body.drag #drop{display:block}
       <div class="pos-wrap"><input id="vshift" type="range" min="-10" max="10" step="1" value="0" aria-labelledby="vshiftLabel" title="사진 전체를 위나 아래로 옮겨 어느 쪽이 잘릴지 정합니다. 크게 보기의 점선으로 확인하세요."></div>
       <div class="control-title pos" id="hshiftLabel" style="margin-top:10px"><span>↔ 좌우 위치</span><span class="value" id="hshiftv">가운데</span></div>
       <div class="pos-wrap"><input id="hshift" type="range" min="-10" max="10" step="1" value="0" aria-labelledby="hshiftLabel" title="사진 전체를 왼쪽이나 오른쪽으로 옮겨 어느 쪽이 잘릴지 정합니다."></div>
+      <div class="control-title" id="cropLabel" style="margin-top:10px"><span>테두리 자르기</span><span class="value" id="cropValue">0%</span></div>
+      <input id="crop" type="range" min="0" max="15" step="1" value="0" aria-labelledby="cropLabel" title="네 변을 같은 비율로 잘라 냅니다. 사진 가장자리의 빈 부분을 없앨 때 씁니다. 크게 보기의 청록 점선으로 확인하세요.">
+      <label class="field" style="margin-top:12px"><span>기준 사진</span>
+        <select id="reference" title="고른 사진의 구도를 기준으로 나머지를 맞춥니다. '자동 중심'은 전체의 가운데 구도를 씁니다."><option value="">자동 중심</option></select>
+      </label>
+      <label class="boundary-toggle"><input id="boundaries" type="checkbox" checked> 크게 보기에 원본 경계(주황 선) 표시</label>
     </div>
     <div class="control-section">
       <button class="btn check" id="checkBtn" disabled title="이웃과 잘 겹치지 않는 사진을 찾아 표시합니다 (영상에 넣는 사진 2장 이상)">각도 검사</button>
-      <button class="btn pick" id="pickBtn" disabled title="구도가 앞 사진과 크게 어긋나는 사진만 자동으로 뺍니다. 뺀 사진은 흐리게 남아 ↩로 되돌릴 수 있습니다.">튀는 사진 빼기</button>
-    </div>
-    <div class="control-section">
-      <h3>영상 글씨</h3>
-      <div class="caption-box">
-        <label class="field big"><span>제목</span>
-          <input id="title" type="text" maxlength="40" placeholder="예: 홍길동 · 상악 배열" autocomplete="off">
-        </label>
-        <label class="field big"><span>날짜</span>
-          <select id="labelMode">
-            <option value="date">날짜</option>
-            <option value="months">경과 기간</option>
-            <option value="none">없음</option>
-          </select>
-        </label>
-        <div class="caption-hint">제목은 왼쪽 위, 날짜는 오른쪽 위에 새겨집니다. 만든 뒤에 바꾸면 "다시 만들기"가 필요합니다.</div>
-        <span id="labelNote" hidden></span>
-      </div>
-    </div>
-    <div class="control-section">
-      <button class="btn make" id="makeBtn" disabled>영상 만들기</button>
-    </div>
-    <div class="control-section">
-      <h3>진행</h3>
-      <div id="bar"><i></i></div>
-      <span id="stageText"></span>
-      <span id="eta"></span>
-      <button class="btn danger" id="cancel" disabled>취소</button>
+      <button class="btn pick" id="pickBtn" disabled title="구도가 앞 사진과 크게 어긋나는 사진만 자동으로 뺍니다. ★ 꼭 포함 사진은 빼지 않습니다. 뺀 사진은 흐리게 남아 ↩로 되돌릴 수 있습니다.">튀는 사진 빼기</button>
       <span id="checkNote"></span>
     </div>
+    <div hidden aria-hidden="true"><div id="bar"><i></i></div><span id="stageText"></span><span id="eta"></span><button id="cancel" disabled>취소</button></div>
     <div class="control-section">
       <h3>결과</h3>
       <div id="resultInfo">아직 만든 영상이 없습니다.</div>
-      <button class="btn primary save block" id="saveBtn" style="margin-top:10px" disabled>MP4 저장</button>
+    </div>
+    <div class="control-section">
+      <h3>작업 보관</h3>
+      <div class="hint" style="margin-bottom:8px">긴 작업을 중간에 멈출 때 씁니다. 사진(작업용 사본)과 편집값을 파일 하나로 내려받고, 나중에 "작업 열기"로 이어서 합니다. 환자 사진이 들어 있으니 이 컴퓨터 밖으로 내보내지 마세요.</div>
+      <div class="film-btns">
+        <button class="btn" id="projectSave" disabled>작업 저장</button>
+        <button class="btn" id="projectOpen">작업 열기</button>
+      </div>
+      <input type="file" id="projectFile" accept=".caseframe,application/json" hidden>
     </div>
     <div class="control-section">
       <h3>도움말</h3>
       <div class="hint">
         같은 방향(예: 상악 교합면)으로 찍은 사진만 넣어 주세요.<br>
         촬영 팁: 카메라 각도와 거리를 매번 비슷하게 맞추면 영상이 훨씬 매끄럽습니다.<br>
-        25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를 고르세요.<br>
+        25장 기준 고품질은 보통 2~5분 걸립니다. 오래 걸리면 "빠르게"를, 구도만 빨리 확인하려면 "원본 겹치기"를 고르세요.<br>
         노란 "자동 뒤집음"이 틀렸으면 ⇄로 되돌리세요. F를 누르면 전체 화면.<br>
-        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다.<br>
+        ✕는 그 사진을 영상에서 뺄 뿐 지우지 않습니다. 흐리게 남고 ↩로 다시 넣을 수 있습니다. ☆ 꼭 포함으로 표시한 사진은 "튀는 사진 빼기"가 건드리지 않습니다.<br>
         사진을 클릭하면 크게 보면서 손으로 맞출 수 있습니다. 각도 검사를 한 뒤에 들어가면 자동으로 맞춘 구도 위에서 크기·회전·위치를 손봅니다(Esc나 더블클릭으로 닫기, ←/→ 이동).<br>
-        맞춤 화면에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.
+        크게 보기의 "연결 반복"은 앞뒤 사진 두 장을 계속 겹쳐 보여 줍니다. 구도가 어긋난 곳을 찾을 때 쓰세요.<br>
+        맞춤 화면에서 휠을 굴리면 4배까지 확대해 확인할 수 있습니다(0 또는 "맞춤"으로 되돌리기). 확대는 보기용이라 영상에는 영향이 없습니다.<br>
+        영상을 만든 뒤 무엇이든 바꾸면 저장이 잠기고 "다시 만들기"가 필요합니다. 실행 취소(⌘/Ctrl Z)는 최근 편집 20단계를 되돌립니다(사진 넣기 전으로는 돌아가지 않습니다).<br>
+        "작업 저장"은 사진과 맞춤값을 한 파일(.caseframe)로 컴퓨터에 내려받습니다. 나중에 "작업 열기"로 이어서 할 수 있습니다. 원본 사진은 따로 보관하세요.
       </div>
     </div>
   </aside>
@@ -502,7 +512,7 @@ body.drag #drop{display:block}
 <section class="filmstrip">
   <div class="film-info">
     <h2>가져온 사진</h2>
-    <p>끌어서 순서를 바꾸고, ⇄로 뒤집고, ✕로 영상에서 뺍니다(↩로 다시 넣기). "날짜순 정렬"은 전체를 파일 이름의 날짜 순으로 다시 세우고 번호를 1부터 매깁니다.</p>
+    <p>끌어서 순서를 바꾸고, ✕로 목록에서 아예 없앱니다(뒤집기·빼기·꼭 포함은 위 격자에서). "날짜순 정렬"은 전체를 파일 이름의 날짜 순으로 다시 세우고 번호를 1부터 매깁니다.</p>
     <div class="film-btns">
       <button class="btn" id="bOpen">폴더에서 선택</button>
       <button class="btn sort" id="sortBtn" disabled title="파일 이름의 날짜 순으로 다시 정렬하고 번호를 1부터 매깁니다">날짜순 정렬</button>
@@ -510,11 +520,14 @@ body.drag #drop{display:block}
     <input id="file" type="file" accept="image/*" multiple hidden>
   </div>
   <div class="asset-list" id="assetList">
-    <div class="asset-empty" id="assetEmpty"><b>① 사진 끌어다 놓기</b> → <b>② 영상 만들기</b> → <b>③ MP4 저장</b><br>화면 아무 곳에나 떨어뜨려도 들어갑니다. 사진은 인터넷에 올라가지 않습니다.</div>
+    <div class="asset-empty" id="assetEmpty"><b>① 사진 끌어다 놓기</b> → <b>② 영상 만들기</b> → <b>③ MP4 저장</b><br>화면 아무 곳에나 떨어뜨려도 들어갑니다. 한 번에 최대 40장, HEIC는 JPG로 바꿔 주세요. 사진은 인터넷에 올라가지 않습니다.</div>
   </div>
-  <div class="film-hint">
-    한 번에 최대 40장 · HEIC 사진은 JPG로 바꿔 넣어 주세요.<br>
-    영상을 만드는 동안에는 사진 줄과 설정이 잠깁니다 — 바꾸려면 취소하세요.
+  <div class="action-dock">
+    <div id="resultStatus" class="result-status" role="status">사진을 2장 이상 넣어 주세요</div>
+    <div class="action-row">
+      <button class="btn make" id="makeBtn" disabled>영상 만들기</button>
+      <button class="btn primary save" id="saveBtn" disabled>MP4 저장</button>
+    </div>
   </div>
 </section>
 
@@ -523,6 +536,6 @@ body.drag #drop{display:block}
 <div id="drop"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="../vendor/opencv.js" async onerror="var t=document.getElementById('toast');t.textContent='OpenCV 파일을 불러오지 못했습니다. 새로고침해 주세요.';t.className='show'"></script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=20260925-13"></script>
 </body>
 </html>
