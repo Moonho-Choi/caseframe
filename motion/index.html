@@ -87,8 +87,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
 .pulse{animation:pulse .4s 2}
 
-.privacy-note{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10.5px;flex:none}
-.privacy-note svg{width:12px;height:12px;flex:none;opacity:.85}
 #gpunote{color:var(--warn);font-size:10.5px;flex:none;max-width:280px;line-height:1.35}
 
 /* ── 작업 영역: 무대 + 오른쪽 조절판 ── */
@@ -334,7 +332,7 @@ body.locked .card{cursor:default}
 #drop{position:fixed;inset:0;border:3px dashed var(--accent);background:rgba(53,199,176,.13);display:none;z-index:8;pointer-events:none}
 body.drag #drop{display:block}
 @media (max-width:900px){
-  .brand small,.privacy-note{display:none}
+  .brand small{display:none}
   .filmstrip{grid-template-columns:1fr}
   .film-hint{display:none}
   .film-info{border-right:0;padding:10px 14px 0}
@@ -366,7 +364,6 @@ body.drag #drop{display:block}
     <div><b>CaseFrame</b><small>치료 진행 영상 · 로고를 누르면 처음으로</small></div>
   </div>
   <span class="sep"></span>
-  <div class="privacy-note" title="모든 사진은 사용하시는 컴퓨터 안에서만 처리되며, 인터넷이나 외부 서버로 전송되지 않습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>사진은 이 컴퓨터 안에서만 처리됩니다</span></div>
   <div class="caption-bar" id="captionBar">
     <label class="cap-field" title="영상 왼쪽 위에 새겨집니다. 만든 뒤에 바꾸면 '다시 만들기'가 필요합니다."><span>제목</span><input id="title" type="text" maxlength="40" placeholder="예: 홍길동 · 상악 배열" autocomplete="off"></label>
     <label class="cap-field" title="영상 오른쪽 위에 새겨집니다. 경과 기간은 첫 사진 기준 개월 수입니다."><span>날짜</span><select id="labelMode"><option value="date">날짜</option><option value="months">경과 기간</option><option value="none">없음</option></select></label>
