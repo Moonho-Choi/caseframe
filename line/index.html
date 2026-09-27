@@ -7,17 +7,74 @@
 <meta name="description" content="캡처한 엑스레이·사진 위에 직선과 곡선을 그려 복사·저장하는 CaseFrame 도구.">
 <title>선그리기 전용 — CaseFrame</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<!-- UI 글꼴: 본체와 동일한 Pretendard Variable 웹폰트. 저장 이미지에는 글자를 그리지 않으므로 출력물과 무관하다. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script>
+// 저장된 테마를 그리기 전에 복원한다(깜빡임 방지). 저장값이 없으면 밝은 화면이 기본. 키는 본체와 같은 "cf-theme".
+(function () {
+  try {
+    if (localStorage.getItem('cf-theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+  } catch (error) {}
+})();
+</script>
 <style>
+/* ── 테마 토큰 (본체 index.html과 같은 팔레트) ──
+   기본은 밝은 화면. [data-theme="dark"]가 붙으면 어두운 화면.
+   --paper는 빈 안내판(종이) 전용 값이라 두 테마에서 동일하게 둔다.
+   저장·복사되는 이미지(exportCanvas)는 사진과 그린 선만 그리므로 테마와 무관하다. */
 :root{
-  --bg:#000000; --panel:#121A22; --panel-2:#18222C; --line:#273240;
-  --muted:#93A1B0; --text:#E8EEF4; --accent:#35C7B0; --accent-2:#1E9B84;
-  --paper:#f6f7f8; --danger:#fb7185;
+  color-scheme:light;
+  --bg:#F5F7F6; --panel:#FFFFFF; --panel-2:#EDF2F0;
+  --line:#E3E8E6; --line-strong:#C9D4CF;
+  --muted:#5C6B66; --text:#1B2B26;
+  --accent:#35C7B0;        /* 민트: 선택 테두리·장식 전용 (밝은 바탕에서 글자로 쓰면 안 보임) */
+  --accent-2:#14524A;      /* 딥그린: 주요 버튼 배경·강조 글자 */
+  --accent-ink:#14524A;    /* "글자로 쓰는 강조색" — 라이트는 딥그린 */
+  --paper:#f6f7f8;
+  --danger:#E11D48; --danger-bg:#FDECF0; --danger-border:#F3C2CE;
+  --glass-bg:rgba(255,255,255,.72); --edge-hl:rgba(255,255,255,.65);
+  --btn-bg:#FFFFFF; --btn-bg-hover:#F2F6F4;
+  --btn-border:#D5DDDA; --btn-border-hover:#B9C6C1;
+  --btn-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 3px rgba(20,60,50,.1);
+  --hover-bg:#EDF2F0; --active-bg:#E3E8E6;
+  --primary-bg:linear-gradient(180deg,#1A6459,#14524A);
+  --primary-bg-hover:linear-gradient(180deg,#1E7063,#175D54);
+  --primary-fg:#FFFFFF;
+  --primary-shadow:inset 0 1px 1px rgba(255,255,255,.2),0 4px 14px rgba(20,82,74,.28);
+  --stage-bg:#E7EDEA; --stage-glow:#F0F4F2; --stage-dot:#D3DDD8;
+  --sheet-shadow:0 0 0 1px rgba(20,60,50,.1),0 14px 40px rgba(20,60,50,.14);
+  --toast-bg:#22332D; --toast-border:#22332D; --toast-fg:#FFFFFF;
+  --photo-edge:rgba(20,60,50,.45);   /* 화면 전용 사진 경계선 — 저장 이미지에는 그리지 않는다 */
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121B17; --panel:#1A2620; --panel-2:#223028;
+  --line:#2A3A33; --line-strong:#3A4A42;
+  --muted:#93A69E; --text:#E6EDEA;
+  --accent:#35C7B0; --accent-2:#1E9B84;
+  --accent-ink:#35C7B0;    /* 어두운 화면에서는 민트가 글자 강조색 */
+  --danger:#fb7185; --danger-bg:#2b1820; --danger-border:#583241;
+  --glass-bg:rgba(18,27,23,.5); --edge-hl:rgba(255,255,255,.09);
+  --btn-bg:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
+  --btn-bg-hover:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03) 50%,rgba(255,255,255,.05));
+  --btn-border:rgba(255,255,255,.09); --btn-border-hover:rgba(255,255,255,.18);
+  --btn-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 4px 12px rgba(0,0,0,.28);
+  --hover-bg:#223028; --active-bg:#2A3A33;
+  --primary-bg:linear-gradient(180deg,#58E0C9,#23A78E 55%,#1E9B84);
+  --primary-bg-hover:linear-gradient(180deg,#65E6D1,#2AB598 55%,#23A78E);
+  --primary-fg:#06211d;
+  --primary-shadow:inset 0 1px 1px rgba(255,255,255,.35),inset 0 -2px 4px rgba(6,35,29,.22),0 4px 14px rgba(53,199,176,.3);
+  --stage-bg:#0E1613; --stage-glow:#17221C; --stage-dot:#1D2A24;
+  --sheet-shadow:0 0 0 1px rgba(255,255,255,.12),0 24px 60px rgba(0,0,0,.5);
+  --toast-bg:#1C2A24; --toast-border:#33443C; --toast-fg:#FFFFFF;
+  --photo-edge:rgba(255,255,255,.85);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{
   overflow:hidden; background:var(--bg); color:var(--text);
-  font-family:Inter,Pretendard,"Noto Sans KR",system-ui,-apple-system,sans-serif; font-size:13px;
+  font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo",Inter,system-ui,-apple-system,sans-serif; font-size:13px;
   display:flex; flex-direction:column;
 }
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -25,9 +82,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 /* ── 상단 바 (CaseFrame과 같은 문법) ── */
 .topbar{
   display:flex; align-items:center; gap:8px; padding:9px 14px;
-  background:rgba(13,19,27,.72); border-bottom:1px solid rgba(255,255,255,.07);
+  background:var(--glass-bg); border-bottom:1px solid var(--line);
   -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 var(--edge-hl);
   user-select:none; flex:none; overflow-x:auto; z-index:5;
 }
 .brand{display:flex;align-items:center;gap:10px;cursor:pointer;flex:none;margin-right:4px}
@@ -40,20 +97,28 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
   min-height:34px;padding:0 12px;position:relative;white-space:nowrap;flex:none;
-  border:1px solid rgba(255,255,255,.09);border-radius:12px;
-  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 4px 12px rgba(0,0,0,.28);
+  border:1px solid var(--btn-border);border-radius:12px;
+  background:var(--btn-bg);
+  box-shadow:var(--btn-shadow);
   transition:border-color .15s,background .15s;
 }
-.btn:hover{border-color:rgba(255,255,255,.18);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03) 50%,rgba(255,255,255,.05))}
+.btn:hover{border-color:var(--btn-border-hover);background:var(--btn-bg-hover)}
 .btn svg{width:14px;height:14px;flex:none}
 .btn.ghost{background:transparent}
+.btn.icon{width:34px;padding:0}
+/* 테마 전환 버튼: 밝은 화면에서는 달(어두운 화면으로), 어두운 화면에서는 해(밝은 화면으로) */
+.theme-ico{font-size:15px;line-height:1}
+.theme-ico::before{content:'🌙'}
+[data-theme="dark"] .theme-ico::before{content:'☀️'}
+.theme-label::before{content:'다크 모드'}
+[data-theme="dark"] .theme-label::before{content:'밝은 모드'}
 .btn.primary{
-  border-color:rgba(53,199,176,.5); color:#06231D; font-weight:700;
-  background:linear-gradient(180deg,#4ADBC3,#1E9B84);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 4px 14px rgba(30,155,132,.35);
+  border-color:rgba(255,255,255,.25); color:var(--primary-fg); font-weight:700;
+  background:var(--primary-bg);
+  box-shadow:var(--primary-shadow);
 }
-.btn.on,.btn.tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
+.btn.primary:hover{background:var(--primary-bg-hover)}
+.btn.on,.btn.tool.on{border-color:rgba(53,199,176,.6);color:var(--accent-ink);background:rgba(53,199,176,.12);font-weight:700}
 .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 
 .privacy-note{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10.5px;flex:none}
@@ -63,17 +128,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 /* 상단 되돌리기·다시 실행 묶음 (CaseFrame 본체와 같은 문법) */
 .history-group{
   display:flex;align-items:stretch;min-height:34px;flex:none;
-  border:1px solid rgba(255,255,255,.09);border-radius:12px;
-  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.16);overflow:hidden;
+  border:1px solid var(--btn-border);border-radius:12px;
+  background:var(--btn-bg);
+  box-shadow:var(--btn-shadow);overflow:hidden;
 }
 .history-btn{
   display:inline-flex;align-items:center;gap:7px;padding:0 12px;border:0;background:transparent;
-  color:#c3cedb;cursor:pointer;font-size:12.5px;white-space:nowrap;transition:background .15s,color .15s;
+  color:var(--muted);cursor:pointer;font-size:12.5px;white-space:nowrap;transition:background .15s,color .15s;
 }
 .history-btn svg{width:15px;height:15px}
-.history-btn:hover{color:var(--accent);background:#1c2936}
-.history-btn:active{background:#22303f}
+.history-btn:hover{color:var(--accent-ink);background:var(--hover-bg)}
+.history-btn:active{background:var(--active-bg)}
 .history-btn:disabled{opacity:.32;cursor:default;pointer-events:none}
 .history-divider{width:1px;margin:6px 0;background:var(--line)}
 
@@ -81,67 +146,73 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 .tool-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tool-row .tool{
   display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 0;
-  border:1px solid rgba(255,255,255,.14);border-radius:12px;color:var(--muted);font-size:12px;
-  background:rgba(255,255,255,.03);cursor:pointer;
+  border:1px solid var(--btn-border);border-radius:12px;color:var(--muted);font-size:12px;
+  background:var(--btn-bg);cursor:pointer;
 }
 .tool-row .tool svg{width:16px;height:16px}
-.tool-row .tool:hover{background:rgba(255,255,255,.07);color:var(--text)}
-.tool-row .tool.on{border-color:rgba(53,199,176,.85);color:#06231D;background:linear-gradient(180deg,#4ADBC3,#1E9B84);font-weight:700}
+.tool-row .tool:hover{background:var(--hover-bg);color:var(--text)}
+.tool-row .tool.on{border-color:transparent;color:var(--primary-fg);background:var(--primary-bg);box-shadow:var(--primary-shadow);font-weight:700}
 
 /* 왼쪽 도구 기둥: 직선·곡선 (CaseFrame 본체와 같은 문법) */
 .toolrail{
   flex:none;z-index:12;padding:12px 8px;
-  border-right:1px solid rgba(255,255,255,.06);background:rgba(13,19,27,.38);
+  border-right:1px solid var(--line);background:var(--glass-bg);
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 var(--edge-hl);
 }
 .toolrail .tool{
   width:40px;height:40px;margin-bottom:6px;display:grid;place-items:center;
-  border:1px solid rgba(255,255,255,.09);border-radius:12px;color:#AEBCCA;
-  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015) 50%,rgba(255,255,255,.03));
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.14);cursor:pointer;
+  border:1px solid var(--btn-border);border-radius:12px;color:var(--muted);
+  background:var(--btn-bg);
+  box-shadow:var(--btn-shadow);cursor:pointer;
 }
 .toolrail .tool svg{width:18px;height:18px}
-.toolrail .tool:hover{color:var(--accent);border-color:rgba(53,199,176,.35)}
+.toolrail .tool:hover{color:var(--accent-ink);border-color:rgba(53,199,176,.5)}
 .toolrail .tool.on{
-  color:#06231D;border-color:transparent;
-  background:linear-gradient(180deg,#58E0C9,#23A78E);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.4),0 4px 12px rgba(53,199,176,.3);
+  color:var(--primary-fg);border-color:transparent;
+  background:var(--primary-bg);
+  box-shadow:var(--primary-shadow);
 }
 .inspector{
   flex:none;width:224px;overflow-y:auto;
-  border-left:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+  border-left:1px solid var(--line);background:var(--glass-bg);
+  -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
 }
 .inspector-head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
 .inspector-head h2{margin:0 0 4px;font-size:15px}
 .inspector-head p{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
 .control-section{padding:12px 16px;border-bottom:1px solid var(--line)}
-.control-section h3{margin:0 0 9px;font-size:11.5px;color:#c7d2dc;letter-spacing:.02em}
+.control-section h3{margin:0 0 9px;font-size:11.5px;color:var(--muted);letter-spacing:.02em}
 .control-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-size:11.5px;color:var(--muted)}
 .control-title .value{color:var(--text)}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .color-chips{display:flex;flex-wrap:wrap;gap:7px}
-.sw{width:24px;height:24px;border-radius:50%;padding:0!important;border:2px solid rgba(0,0,0,.4);flex:none}
-.sw.on{outline:2px solid #fff;outline-offset:2px}
+.sw{width:24px;height:24px;border-radius:50%;padding:0!important;border:2px solid var(--line-strong);flex:none}
+.sw.on{outline:2px solid var(--accent);outline-offset:2px}
 .sw-input{
-  width:24px;height:24px;border-radius:50%;border:2px dashed #7b8794;padding:0;cursor:pointer;flex:none;
+  width:24px;height:24px;border-radius:50%;border:2px dashed var(--line-strong);padding:0;cursor:pointer;flex:none;
   background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);-webkit-appearance:none;appearance:none;overflow:hidden;
 }
 .sw-input::-webkit-color-swatch-wrapper{padding:0;opacity:0}
-.sw-input.on{outline:2px solid #fff;outline-offset:2px;border-style:solid}
-.btn.danger{width:100%;color:#ffd5dc;border-color:#583241;background:#2b1820}
+.sw-input.on{outline:2px solid var(--accent);outline-offset:2px;border-style:solid}
+.btn.danger{width:100%;color:var(--danger);border-color:var(--danger-border);background:var(--danger-bg)}
 .hint{color:var(--muted);font-size:10.5px;line-height:1.7}
 .privacy-note svg{width:12px;height:12px;flex:none;opacity:.85}
 
 /* ── 무대 + 종이 프레임 ── */
-#stage{position:relative;flex:1;min-width:0;min-height:0;cursor:crosshair;overflow:hidden}
+#stage{
+  position:relative;flex:1;min-width:0;min-height:0;cursor:crosshair;overflow:hidden;
+  background-color:var(--stage-bg);
+  background-image:radial-gradient(var(--stage-dot) 1px,transparent 1px),radial-gradient(90% 80% at 50% 40%,var(--stage-glow) 0%,var(--stage-bg) 100%);
+  background-size:20px 20px,100% 100%;
+}
 #stage.pan{cursor:grab}#stage.panning{cursor:grabbing}
 canvas{display:block}
 .sheet-empty{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(560px,82%);aspect-ratio:3/2;padding:3.2%;
   background:var(--paper);
-  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12);
+  box-shadow:var(--sheet-shadow);
   pointer-events:none;
 }
 .sheet-empty .slot{
@@ -156,9 +227,9 @@ canvas{display:block}
 /* ── 아래 필름 칸 (CaseFrame과 같은 문법) ── */
 .filmstrip{
   flex:none;min-width:0;display:grid;grid-template-columns:220px minmax(0,1fr) auto;
-  border-top:1px solid rgba(255,255,255,.07);background:rgba(13,19,27,.42);
+  border-top:1px solid var(--line);background:var(--glass-bg);
   -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 var(--edge-hl);
 }
 .film-info{padding:11px 16px;border-right:1px solid var(--line)}
 .film-info h2{margin:0 0 4px;font-size:13px}
@@ -168,7 +239,7 @@ canvas{display:block}
 .asset img{-webkit-user-drag:none}
 .asset{
   position:relative;flex:0 0 122px;overflow:hidden;
-  border:1px solid #2c3948;border-radius:7px;background:#18222d;cursor:grab;
+  border:1px solid var(--line-strong);border-radius:7px;background:var(--panel-2);cursor:grab;
 }
 .asset img{width:100%;height:100%;display:block;object-fit:cover}
 .asset span{
@@ -178,17 +249,18 @@ canvas{display:block}
 }
 .asset.active{border-color:var(--accent);box-shadow:0 0 0 1.5px rgba(53,199,176,.55)}
 .asset-empty{align-self:center;color:var(--muted);font-size:11px;line-height:1.6;padding:0 6px}
-.asset-empty b{color:#c7d2dc}
+.asset-empty b{color:var(--accent-ink)}
 /* 하단 사용 안내: 목록 오른쪽 빈자리, 좁은 화면에서는 숨긴다 */
 .film-hint{align-self:center;padding:0 14px;border-left:1px solid var(--line);color:var(--muted);font-size:10.5px;line-height:1.75}
 
 /* ── 기타 ── */
-.sitebar{flex:none;padding:6px 14px;color:#6d7d8e;font-size:10.5px;border-top:1px solid rgba(255,255,255,.05)}
-.sitebar a{color:#8fa0b0}
+.sitebar{flex:none;padding:6px 14px;color:var(--muted);font-size:10.5px;border-top:1px solid var(--line);background:var(--bg)}
+.sitebar a{color:var(--accent-ink)}
 body.fs .topbar,body.fs .filmstrip,body.fs .sitebar,body.fs .toolrail,body.fs .inspector{display:none}
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
-  background:#000c;color:#fff;padding:10px 18px;border-radius:8px;
+  background:var(--toast-bg);color:var(--toast-fg);border:1px solid var(--toast-border);
+  padding:10px 18px;border-radius:8px;
   opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;
 }
 #toast.show{opacity:1}
@@ -200,7 +272,7 @@ body.drag #drop{display:block}
   .film-hint{display:none}
   .film-info{border-right:0;padding:10px 14px 0}
   .workspace{flex-direction:column}
-  .inspector{width:auto;max-height:190px;border-left:0;border-top:1px solid rgba(255,255,255,.07)}
+  .inspector{width:auto;max-height:190px;border-left:0;border-top:1px solid var(--line)}
 }
 </style>
 </head>
@@ -228,6 +300,7 @@ body.drag #drop{display:block}
     </div>
     <div><b>CaseFrame</b><small>선그리기 도구 · 로고를 누르면 처음으로</small></div>
   </div>
+  <button class="btn" id="themeToggle" title="밝은/어두운 화면 전환" aria-label="밝은/어두운 화면 전환"><span class="theme-ico" aria-hidden="true"></span> <span class="theme-label"></span></button>
   <span class="sep"></span>
   <div class="history-group" role="group" aria-label="작업 되돌리기">
     <button class="history-btn" id="bUndo" title="되돌리기 (Ctrl+Z)">
@@ -451,8 +524,8 @@ function render(){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!view.img) return;
   ctx.drawImage(view.img, view.ox, view.oy, view.img.width*view.scale, view.img.height*view.scale);
-  // 사진 테두리 — 검정 바탕에서 어두운 사진의 경계가 보이도록 흰 선 (직각)
-  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1;
+  // 사진 테두리 — 바탕과 사진의 경계가 보이도록 테마별 색(--photo-edge). 화면 전용이라 저장 이미지(exportCanvas)에는 안 그려진다
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--photo-edge').trim() || 'rgba(255,255,255,.85)'; ctx.lineWidth = 1;
   ctx.strokeRect(view.ox - .5, view.oy - .5, view.img.width*view.scale + 1, view.img.height*view.scale + 1);
   drawShapes(ctx, shapes, toScr, 1);
   if(draft) drawDraft();
@@ -669,6 +742,17 @@ window.addEventListener('beforeunload', e=>{ if(shapes.length){ e.preventDefault
 const brandHome = $('brandHome');
 brandHome.addEventListener('click', ()=>{ location.href = '/'; });
 brandHome.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); location.href = '/'; } });
+
+// 테마 전환: <html>의 data-theme을 바꾸고 localStorage("cf-theme")에 저장한다(본체와 같은 키).
+// 저장·복사 이미지(캔버스)는 사진과 그린 선만 담으므로 테마와 무관하게 동일하다.
+$('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  if(next === 'dark') root.dataset.theme = 'dark';
+  else delete root.dataset.theme;
+  try{ localStorage.setItem('cf-theme', next); }catch(e){}
+  render();   // 사진 경계선(화면 전용) 색을 새 테마로 다시 그린다
+});
 
 resize(); updateButtons(); renderAssets();
 
