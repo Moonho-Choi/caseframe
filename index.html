@@ -183,7 +183,7 @@
 
     .app {
       display: grid;
-      grid-template-rows: 58px minmax(0, 1fr) 116px 26px;
+      grid-template-rows: 58px minmax(0, 1fr) 116px;
       height: 100%;
     }
 
@@ -729,7 +729,7 @@
       --slot-border: #cfd5db;
       position: relative;
       /* 폭은 화면(무대) 높이에 맞춰 계산해, 어두운 빈 공간 없이 최대한 크게 띄운다 */
-      width: min(100%, calc((100vh - 232px) * 1.5));
+      width: min(100%, calc((100vh - 206px) * 1.5));
       aspect-ratio: 3 / 2;
       padding: var(--sheet-pad, 1.2%);
       color: var(--sheet-ink);
@@ -805,6 +805,45 @@
     }
 
     .photo-slot[hidden], .text-slot[hidden] { display: none !important; }
+
+    /* 십자 배치: 정면 사진을 기준으로 사진 칸마다 크기를 따로 정해 붙인다 (위치는 스크립트가 % 단위로 지정) */
+    .sheet:not(.generic-layout) .sheet-grid { display: block; }
+    .sheet:not(.generic-layout) .photo-slot,
+    .sheet:not(.generic-layout) .text-slot { position: absolute; }
+
+    /* 선택한 사진 칸의 크기 손잡이 (저장 이미지에는 그려지지 않음) */
+    .resize-box { position: absolute; z-index: 7; display: none; pointer-events: none; }
+    .sheet:not(.generic-layout) .resize-box.on { display: block; }
+    .rz {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      border: 2px solid var(--accent);
+      border-radius: 3px;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .rz[data-dir="n"], .rz[data-dir="s"] { width: 24px; height: 9px; margin: -4.5px 0 0 -12px; border-radius: 5px; }
+    .rz[data-dir="e"], .rz[data-dir="w"] { width: 9px; height: 24px; margin: -12px 0 0 -4.5px; border-radius: 5px; }
+    .rz[data-dir="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .rz[data-dir="n"]  { left: 50%; top: 0; cursor: ns-resize; }
+    .rz[data-dir="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .rz[data-dir="e"]  { left: 100%; top: 50%; cursor: ew-resize; }
+    .rz[data-dir="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .rz[data-dir="s"]  { left: 50%; top: 100%; cursor: ns-resize; }
+    .rz[data-dir="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .rz[data-dir="w"]  { left: 0; top: 50%; cursor: ew-resize; }
+    .rz:hover, .rz.dragging { background: var(--accent); }
+
+    /* 크기 조절하는 동안만: 같은 줄·같은 칸의 이웃 사진 변을 빨간 점선으로 이어 보여 준다 (이웃 사진과 조절 중인 사진 사이에만) */
+    .size-guides { position: absolute; inset: 0; z-index: 6; display: none; pointer-events: none; }
+    .size-guides.on { display: block; }
+    .size-guides i { position: absolute; display: block; }
+    .size-guides i.gv { width: 0; margin-left: -.75px; border-left: 1.5px dashed #ff3434; }
+    .size-guides i.gh { height: 0; margin-top: -.75px; border-top: 1.5px dashed #ff3434; }
     .sheet.generic-layout .photo-slot { grid-column: auto !important; grid-row: auto !important; }
     .sheet.generic-layout .slot-label { display: none; }
     .sheet.generic-layout.labeled-layout .slot-label { display: block; }
@@ -1539,22 +1578,6 @@
       cursor: pointer;
     }
 
-    .sitebar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 0 16px;
-      border-top: 1px solid var(--line);
-      background: var(--bg);
-      font-size: 11px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .sitebar a { color: var(--accent-ink); text-decoration: none; }
-    .sitebar a:hover { text-decoration: underline; }
 
     @media (max-width: 960px) {
       .workspace { grid-template-columns: 54px minmax(0, 1fr) 230px; }
@@ -1594,7 +1617,6 @@
       /* 빈 화면 안내가 있을 때는 높이를 내용에 맞춰 늘려 잘리지 않게 한다 */
       .asset-list:has(.asset-empty) { height: auto; }
       .seo-about { padding: 28px 20px 20px; }
-      .sitebar { padding: 7px 12px; white-space: normal; text-align: center; }
       .start-overlay { place-items: start center; padding: 16px 12px; }
       .start-panel { padding: 20px 16px 16px; }
       .start-grid, .start-tools { grid-template-columns: 1fr 1fr; }
@@ -1905,9 +1927,6 @@
       </div>
     </section>
 
-    <footer class="sitebar">
-      <span>제작 <a href="https://eumtmj.co.kr/?utm_source=caseframe&amp;utm_medium=referral" target="_blank" rel="noopener">이음턱편한치과</a> &middot; <a href="mailto:eumtmj@gmail.com">eumtmj@gmail.com</a></span>
-    </footer>
   </main>
 
     <section class="seo-about" id="about">
@@ -2377,11 +2396,11 @@
       layoutOptions.forEach(option => option.classList.toggle('active', option.dataset.layoutOption === layoutKey));
 
       if (config.cross) {
-        sheetGrid.style.gridTemplateColumns = '';
-        sheetGrid.style.gridTemplateRows = '';
         textSlots.forEach(slot => { slot.hidden = false; });
         slots.forEach((slot, index) => { slot.hidden = index >= 5; });
+        if (crossLayoutReady) layoutCross();
       } else {
+        if (crossLayoutReady) clearCrossLayout();
         sheetGrid.style.gridTemplateColumns = `repeat(${config.cols}, minmax(0, 1fr))`;
         sheetGrid.style.gridTemplateRows = `repeat(${config.rows}, minmax(0, 1fr))`;
         textSlots.forEach(slot => { slot.hidden = true; });
@@ -2941,6 +2960,7 @@
     function selectSlot(slot) {
       slots.forEach(item => item.classList.toggle('selected', item === slot));
       selectedSlot = slot;
+      if (crossLayoutReady) updateResizeBox();
       clearTextSelection();
       clearLogoSelection();
       syncControls();
@@ -3947,6 +3967,260 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
     }
+
+    // ---- 십자 배치: 사진 칸 한 장씩 크기 조절 ----
+    // 정면 사진이 가운데, 위·아래 교합면은 정면의 위·아래에, 측면 두 장은 양옆에 늘 붙는다.
+    // 선택한 사진 칸의 바깥쪽 손잡이를 끌면 그 칸만 커지고 작아진다(모서리는 가로세로 비율 유지).
+    // 전체가 종이를 넘치면 모양은 그대로 두고 전체를 줄여 맞춘다. 손잡이를 두 번 누르면 그 칸만 처음 크기로.
+    // 크기는 이 컴퓨터에 기억되고, 저장 이미지는 화면의 칸 위치를 그대로 따라 그린다.
+    var crossLayoutReady = false;   // selectSlot이 이 코드보다 먼저 불려도 안전하도록 var로 둔다
+    const CROSS_SIZE_KEY = 'caseframe-cross-sizes';
+    const CROSS_KEYS = ['upper', 'right', 'front', 'left', 'lower'];
+    const CROSS_MIN = 0.06;
+    let crossSizes = {};            // { upper: { w, h } } — w는 판 폭, h는 판 높이에 대한 비율. 없으면 기본 크기
+    try {
+      localStorage.removeItem('caseframe-cross-ratio');   // 이전 시험판(경계선 끌기)의 기억은 지운다
+      const savedSizes = JSON.parse(localStorage.getItem(CROSS_SIZE_KEY) || 'null');
+      if (savedSizes) CROSS_KEYS.forEach(key => {
+        const v = savedSizes[key];
+        if (v && Number.isFinite(v.w) && Number.isFinite(v.h)) crossSizes[key] = { w: v.w, h: v.h };
+      });
+    } catch (error) {}
+
+    const crossSlotEl = key => slots.find(slot => slot.dataset.slot === key);
+    const crossGapPct = () => sheetMarginPct * 0.022 / 100;
+
+    // 기본 크기: 예전 바둑판(가로 1 : 1.28 : 1, 세로 0.92 : 1 : 0.92)과 똑같이 보이게 한다
+    function defaultCrossSize(key) {
+      const g = crossGapPct();
+      const side = (1 - 2 * g) / 3.28;
+      const row = (1 - 2 * g) / 2.84;
+      if (key === 'upper' || key === 'lower') return { w: side * 1.28, h: row * 0.92 };
+      if (key === 'front') return { w: side * 1.28, h: row };
+      return { w: side, h: row };
+    }
+    const crossSize = key => crossSizes[key] || defaultCrossSize(key);
+
+    let crossFit = 1;   // 종이에 맞추느라 줄인 배율 (손잡이 끌기 계산에 씀)
+
+    function layoutCross() {
+      if (sheet.classList.contains('generic-layout')) return;
+      const W = sheetGrid.clientWidth;
+      const H = sheetGrid.clientHeight;
+      if (!W || !H) return;
+      const g = crossGapPct();
+      const gx = W * g;
+      const gy = H * g;
+      const px = key => { const v = crossSize(key); return { w: v.w * W, h: v.h * H }; };
+      const F = px('front'), U = px('upper'), D = px('lower'), R = px('right'), L = px('left');
+
+      // 정면 사진 왼쪽 위를 (0, 0)으로 두고 나머지를 붙인다
+      const p = {};
+      p.front = { x: 0, y: 0, ...F };
+      p.right = { x: -gx - R.w, y: (F.h - R.h) / 2, ...R };
+      p.left = { x: F.w + gx, y: (F.h - L.h) / 2, ...L };
+      const overlapX = (x, w, b) => x < b.x + b.w && x + w > b.x;
+      const ux = (F.w - U.w) / 2;
+      let upperBottom = -gy;
+      [p.right, p.left].forEach(b => { if (overlapX(ux, U.w, b)) upperBottom = Math.min(upperBottom, b.y - gy); });
+      p.upper = { x: ux, y: upperBottom - U.h, ...U };
+      const dx = (F.w - D.w) / 2;
+      let lowerTop = F.h + gy;
+      [p.right, p.left].forEach(b => { if (overlapX(dx, D.w, b)) lowerTop = Math.max(lowerTop, b.y + b.h + gy); });
+      p.lower = { x: dx, y: lowerTop, ...D };
+
+      // 전체 묶음이 종이를 넘치면 줄이고, 가운데에 놓는다
+      const all = Object.values(p);
+      const minX = Math.min(...all.map(b => b.x));
+      const minY = Math.min(...all.map(b => b.y));
+      const maxX = Math.max(...all.map(b => b.x + b.w));
+      const maxY = Math.max(...all.map(b => b.y + b.h));
+      const s = Math.min(1, W / (maxX - minX), H / (maxY - minY));
+      crossFit = s;
+      const ox = (W - (maxX - minX) * s) / 2 - minX * s;
+      const oy = (H - (maxY - minY) * s) / 2 - minY * s;
+      const placed = {};
+      CROSS_KEYS.forEach(key => {
+        const b = p[key];
+        placed[key] = { x: ox + b.x * s, y: oy + b.y * s, w: b.w * s, h: b.h * s };
+      });
+      const setBox = (el, b) => {
+        el.style.left = (b.x / W * 100) + '%';
+        el.style.top = (b.y / H * 100) + '%';
+        el.style.width = (Math.max(0, b.w) / W * 100) + '%';
+        el.style.height = (Math.max(0, b.h) / H * 100) + '%';
+      };
+      CROSS_KEYS.forEach(key => setBox(crossSlotEl(key), placed[key]));
+
+      // 네 귀퉁이 글 칸은 사진과 겹치지 않는 남은 귀퉁이 공간에 놓는다
+      const fr = placed.front, up = placed.upper, lo = placed.lower, rt = placed.right, lf = placed.left;
+      const corner = (x0, y0, x1, y1) => ({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+      const textBoxes = {
+        meta: corner(0, 0, Math.min(up.x, fr.x) - gx, rt.y - gy),
+        diagnosis: corner(Math.max(up.x + up.w, fr.x + fr.w) + gx, 0, W, lf.y - gy),
+        memo: corner(0, rt.y + rt.h + gy, Math.min(lo.x, fr.x) - gx, H),
+        status: corner(Math.max(lo.x + lo.w, fr.x + fr.w) + gx, lf.y + lf.h + gy, W, H)
+      };
+      textSlots.forEach(el => {
+        const name = ['meta', 'diagnosis', 'memo', 'status'].find(n => el.classList.contains(n));
+        if (name) setBox(el, textBoxes[name]);
+      });
+      updateResizeBox();
+    }
+
+    function clearCrossLayout() {
+      [...slots, ...textSlots].forEach(el => { el.style.left = el.style.top = el.style.width = el.style.height = ''; });
+      updateResizeBox();
+    }
+
+    function saveCrossSizes() {
+      try { localStorage.setItem(CROSS_SIZE_KEY, JSON.stringify(crossSizes)); } catch (error) {}
+    }
+
+    // 손잡이: 정면과 맞닿지 않은 바깥쪽에만 둔다 (정면 사진은 여덟 방향 모두)
+    const RESIZE_DIRS = {
+      upper: ['nw', 'n', 'ne', 'w', 'e'],
+      lower: ['sw', 's', 'se', 'w', 'e'],
+      right: ['nw', 'w', 'sw', 'n', 's'],
+      left: ['ne', 'e', 'se', 'n', 's'],
+      front: ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+    };
+    const resizeBox = document.createElement('div');
+    resizeBox.className = 'resize-box';
+    ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(dir => {
+      const handle = document.createElement('div');
+      handle.className = 'rz';
+      handle.dataset.dir = dir;
+      handle.title = dir.length === 2 ? '끌어서 이 사진 칸 크기 조절 (비율 유지) · 두 번 누르면 처음 크기로' : '끌어서 이 사진 칸 늘이기·줄이기 · 두 번 누르면 처음 크기로';
+      resizeBox.appendChild(handle);
+    });
+    sheetGrid.appendChild(resizeBox);
+
+    // 크기 조절 중에만 보이는 빨간 가상선 (저장 이미지에는 그려지지 않음)
+    const sizeGuides = document.createElement('div');
+    sizeGuides.className = 'size-guides';
+    sheetGrid.appendChild(sizeGuides);
+
+    // 가로줄(측면·정면·측면)의 이웃은 위·아래 변(높이 비교), 세로줄(위 교합면·정면·아래 교합면)의 이웃은
+    // 왼쪽·오른쪽 변(폭 비교)을 보여 준다. 선은 그 이웃 사진과 조절 중인 사진을 잇는 구간에만 긋는다.
+    const GUIDE_ROW = ['right', 'front', 'left'];
+    const GUIDE_COL = ['upper', 'front', 'lower'];
+    function updateSizeGuides(activeKey) {
+      const box = key => {
+        const el = crossSlotEl(key);
+        const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+        return { x, y, r: x + parseFloat(el.style.width), b: y + parseFloat(el.style.height) };
+      };
+      const a = box(activeKey);
+      const lines = [];
+      const add = (cls, pos, from, to) => {
+        if (lines.some(l => l.cls === cls && Math.abs(l.pos - pos) < 0.15 && Math.abs(l.from - from) < 0.15 && Math.abs(l.to - to) < 0.15)) return;
+        lines.push({ cls, pos, from, to });
+      };
+      if (GUIDE_ROW.includes(activeKey)) {
+        GUIDE_ROW.filter(key => key !== activeKey).forEach(key => {
+          const s = box(key);
+          const from = Math.min(s.x, a.x), to = Math.max(s.r, a.r);
+          add('gh', s.y, from, to);
+          add('gh', s.b, from, to);
+        });
+      }
+      if (GUIDE_COL.includes(activeKey)) {
+        GUIDE_COL.filter(key => key !== activeKey).forEach(key => {
+          const s = box(key);
+          const from = Math.min(s.y, a.y), to = Math.max(s.b, a.b);
+          add('gv', s.x, from, to);
+          add('gv', s.r, from, to);
+        });
+      }
+      sizeGuides.innerHTML = lines.map(l => l.cls === 'gh'
+        ? `<i class="gh" style="top:${l.pos}%;left:${l.from}%;width:${l.to - l.from}%"></i>`
+        : `<i class="gv" style="left:${l.pos}%;top:${l.from}%;height:${l.to - l.from}%"></i>`).join('');
+    }
+
+    function updateResizeBox() {
+      const key = selectedSlot && selectedSlot.dataset.slot;
+      const show = !sheet.classList.contains('generic-layout') && CROSS_KEYS.includes(key) && !selectedSlot.hidden;
+      resizeBox.classList.toggle('on', Boolean(show));
+      if (!show) return;
+      ['left', 'top', 'width', 'height'].forEach(prop => { resizeBox.style[prop] = selectedSlot.style[prop]; });
+      const dirs = RESIZE_DIRS[key];
+      resizeBox.querySelectorAll('.rz').forEach(handle => { handle.hidden = !dirs.includes(handle.dataset.dir); });
+    }
+
+    let crossDrag = null;
+    resizeBox.querySelectorAll('.rz').forEach(handle => {
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const key = selectedSlot.dataset.slot;
+        const start = crossSize(key);
+        crossDrag = {
+          key,
+          dir: handle.dataset.dir,
+          px: event.clientX,
+          py: event.clientY,
+          W: sheetGrid.clientWidth,
+          H: sheetGrid.clientHeight,
+          // 화면 좌표 → 판 내부 좌표 (화면이 축소돼 보일 때 대비)
+          view: sheetGrid.getBoundingClientRect().width / sheetGrid.clientWidth,
+          fit: crossFit,
+          w: start.w,
+          h: start.h
+        };
+        handle.setPointerCapture(event.pointerId);
+        handle.classList.add('dragging');
+        updateSizeGuides(key);
+        sizeGuides.classList.add('on');
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!crossDrag) return;
+        const { key, dir, W, H, view, fit } = crossDrag;
+        const dx = (event.clientX - crossDrag.px) / view / fit;
+        const dy = (event.clientY - crossDrag.py) / view / fit;
+        const hx = dir.includes('e') ? 1 : dir.includes('w') ? -1 : 0;
+        const vy = dir.includes('s') ? 1 : dir.includes('n') ? -1 : 0;
+        // 가운데 맞춤인 방향은 양쪽으로 함께 늘어나므로 두 배로 움직인다
+        const fx = (key === 'right' || key === 'left') ? 1 : 2;
+        const fy = (key === 'upper' || key === 'lower') ? 1 : 2;
+        const w0 = crossDrag.w * W;
+        const h0 = crossDrag.h * H;
+        let w = w0 + hx * dx * fx;
+        let h = h0 + vy * dy * fy;
+        if (hx && vy) {   // 모서리: 가로세로 비율 유지
+          const k = Math.max(0.05, ((w / w0) + (h / h0)) / 2);
+          w = w0 * k;
+          h = h0 * k;
+        }
+        const clamp = v => Math.min(1, Math.max(CROSS_MIN, v));
+        crossSizes[key] = { w: clamp(w / W), h: clamp(h / H) };
+        layoutCross();
+        updateSizeGuides(key);   // 전체가 다시 가운데 맞춤되며 다른 칸도 움직일 수 있어 매번 다시 그린다
+      });
+      const endDrag = () => {
+        if (!crossDrag) return;
+        crossDrag = null;
+        handle.classList.remove('dragging');
+        sizeGuides.classList.remove('on');
+        saveCrossSizes();
+      };
+      handle.addEventListener('pointerup', endDrag);
+      handle.addEventListener('pointercancel', endDrag);
+      handle.addEventListener('dblclick', event => {
+        event.stopPropagation();
+        delete crossSizes[selectedSlot.dataset.slot];
+        layoutCross();
+        saveCrossSizes();
+        const names = { upper: '위 교합면', lower: '아래 교합면', front: '정면', right: '측면', left: '측면' };
+        showToast(`${names[selectedSlot.dataset.slot] || slotDisplayName(selectedSlot)} 사진 칸을 처음 크기로 되돌렸습니다.`);
+      });
+    });
+
+    // 창 크기나 바깥 여백 설정이 바뀌면 다시 배치한다
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => layoutCross()).observe(sheetGrid);
+    window.addEventListener('resize', layoutCross);
+    crossLayoutReady = true;
 
     selectSlot(selectedSlot);
     applyLayout('cross', false);
