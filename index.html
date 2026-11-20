@@ -848,6 +848,36 @@
     .size-guides.snapped-w i.gv { border-left-color: #00c2a8; border-left-style: solid; }
     .size-guides.snapped-h i.gh { border-top-color: #00c2a8; border-top-style: solid; }
     .snap-match { outline: 2px solid #00c2a8; outline-offset: 2px; }
+    /* 숫자로 편집 창 (왼쪽 단추·사진 우클릭으로 엶) */
+    .num-edit {
+      position: fixed; z-index: 40; display: none; width: 216px; padding: 12px;
+      border: 1px solid var(--pop-border); border-radius: 11px; background: var(--pop-bg);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3); backdrop-filter: blur(20px) saturate(1.3);
+      box-shadow: var(--pop-shadow); color: var(--text); font-size: 11px;
+    }
+    .num-edit.open { display: block; }
+    .num-edit h3 { margin: -12px -12px 2px; padding: 12px 12px 0; font-size: 12px; cursor: move; user-select: none; touch-action: none; }
+    .num-edit .ne-sub { margin: 0 0 10px; color: var(--muted); font-size: 10.5px; }
+    .num-edit .ne-sec { margin: 10px 0 5px; color: var(--muted); font-size: 10.5px; font-weight: 700; }
+    .num-edit .ne-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+    .num-edit .ne-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); }
+    .num-edit .row { display: flex; align-items: center; gap: 3px; }
+    .num-edit .row i { width: 12px; font-style: normal; color: var(--muted); }
+    .num-edit input {
+      width: 100%; min-width: 0; height: 28px; padding: 0 6px; text-align: right;
+      border: 1px solid var(--btn-border); border-radius: 7px; background: var(--panel); color: var(--text);
+      font: inherit; font-size: 12px; font-variant-numeric: tabular-nums;
+    }
+    .num-edit input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+    .num-edit input:disabled { opacity: .45; }
+    .num-edit .ne-same {
+      width: 100%; min-height: 32px; border: 0; border-radius: 8px; cursor: pointer;
+      background: var(--accent-2); color: #fff; font: inherit; font-size: 12px; font-weight: 700;
+    }
+    .num-edit .ne-same:disabled { background: var(--panel-2); color: var(--muted); cursor: default; }
+    .num-edit .ne-same[hidden] { display: none; }
+    .num-edit .ne-hint { margin: 10px 0 0; color: var(--muted); font-size: 10px; }
+
     .sheet.generic-layout .photo-slot { grid-column: auto !important; grid-row: auto !important; }
     /* 사진 이름표(UPPER OCCLUSAL·BEFORE 등 알약 모양)는 쓰지 않는다 — 화면·저장 이미지 모두 숨김 (원장 결정 11-15) */
     .slot-label { display: none !important; }
@@ -1682,6 +1712,7 @@
         <button class="tool" data-tool="guides" data-label="정렬 가이드" title="정렬 가이드 선택" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20" opacity=".55"/><line x1="15" y1="4" x2="15" y2="20" opacity=".55"/><line x1="3" y1="9.3" x2="21" y2="9.3" opacity=".55"/><line x1="3" y1="14.7" x2="21" y2="14.7" opacity=".55"/></svg></button>
         <button class="tool" data-tool="background" data-label="배경색 선택" title="배경색 선택" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" opacity=".5"/></svg></button>
         <button class="tool" data-tool="logo" data-label="병원 로고 넣기" title="병원 로고 넣기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="7.5" width="15" height="13.5" rx="1.5"/><path d="M12 2v3.5"/><path d="M10.2 3.75h3.6"/><path d="M9.75 21v-3.5h4.5V21"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14h.01M12 14h.01M15.5 14h.01"/></svg></button>
+        <button class="tool" data-tool="numedit" data-label="숫자로 편집" title="숫자로 편집 (사진 우클릭으로도 열림)" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="8" width="19" height="8" rx="1.5"/><path d="M6.5 8v3M10 8v4.5M13.5 8v3M17 8v4.5"/></svg></button>
         <button class="tool tool-launch" id="toLineTool" data-label="선그리기 (새 탭)" title="지금 배열을 통째로 이미지로 만들어 선그리기에서 이어 그립니다 (새 탭)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 9l5 6 5-11"/></svg></button>
         <div class="layout-popover" id="layoutPopover">
           <h3>사진 배치 선택</h3>
@@ -2270,6 +2301,7 @@
         if (tool === 'guides') toggleGuidePopover();
         if (tool === 'background') toggleBgPopover();
         if (tool === 'logo') addOrSelectLogo();
+        if (tool === 'numedit') { if (numEdit && numEdit.classList.contains('open')) closeNumEdit(); else openNumEdit(); }
       });
     });
 
@@ -3419,6 +3451,7 @@
       updateRotateTrack();
       updateAdjustTracks();
       updateSlotBgButton();
+      refreshNumEdit();
     }
 
     // 사진별 배경(여백) 색: 지금 보이는 색을 단추에 표시하고, 누르면 흰색↔검정으로 바꾼다
@@ -4346,6 +4379,183 @@
         showToast(`${name} 칸을 처음 크기로 되돌렸습니다.`);
       });
     });
+
+    // 숫자로 편집 창: 왼쪽 도구 단추나 사진 우클릭(휴대폰은 길게 누르기)으로 연다.
+    // 칸 크기(종이 대비 %), 맞은편과 같게, 사진 확대·미세 회전·가로·세로 이동(칸 대비 %)을 숫자로 넣는다.
+    var numEdit = null;   // syncControls가 이 코드보다 먼저 불려도 안전하도록 var로 둔다
+    const NUM_PAIR = { right: 'left', left: 'right', upper: 'lower', lower: 'upper' };
+    const NUM_NAMES = { upper: '위 교합면', lower: '아래 교합면', front: '정면', right: '측면 (오른쪽)', left: '측면 (왼쪽)' };
+    const numSlotName = slot => isCrossLayout() ? NUM_NAMES[slot.dataset.slot] : slotDisplayName(slot);
+    numEdit = document.createElement('div');
+    numEdit.className = 'num-edit';
+    numEdit.innerHTML = `
+      <h3 title="끌어서 창 옮기기">숫자로 편집</h3>
+      <p class="ne-sub" data-name></p>
+      <button class="ne-same" type="button" data-same>맞은편과 같게</button>
+      <div class="ne-sec">칸 크기</div>
+      <div class="ne-grid">
+        <label class="ne-field"><span>너비</span><span class="row"><input data-k="fw" inputmode="decimal" autocomplete="off"><i>%</i></span></label>
+        <label class="ne-field"><span>높이</span><span class="row"><input data-k="fh" inputmode="decimal" autocomplete="off"><i>%</i></span></label>
+      </div>
+      <div class="ne-sec">사진</div>
+      <div class="ne-grid">
+        <label class="ne-field"><span>확대</span><span class="row"><input data-k="zoom" inputmode="decimal" autocomplete="off"><i>%</i></span></label>
+        <label class="ne-field"><span>미세 회전</span><span class="row"><input data-k="rotate" inputmode="decimal" autocomplete="off"><i>°</i></span></label>
+        <label class="ne-field"><span>가로 이동</span><span class="row"><input data-k="px" inputmode="decimal" autocomplete="off"><i>%</i></span></label>
+        <label class="ne-field"><span>세로 이동</span><span class="row"><input data-k="py" inputmode="decimal" autocomplete="off"><i>%</i></span></label>
+      </div>
+      <p class="ne-hint">사진을 우클릭해도 이 창이 열립니다.</p>`;
+    document.body.appendChild(numEdit);
+    if (window.matchMedia && matchMedia('(pointer: coarse)').matches) numEdit.querySelector('.ne-hint').textContent = '사진을 길게 눌러도 이 창이 열립니다.';
+    const numBtn = document.querySelector('.tool[data-tool="numedit"]');
+    const numInput = k => numEdit.querySelector(`input[data-k="${k}"]`);
+    const numOpen = () => numEdit.classList.contains('open');
+    const fmt1 = v => (Math.round(v * 10) / 10).toFixed(1);
+
+    function refreshNumEdit() {
+      if (!numEdit || !numOpen() || !selectedSlot) return;
+      const slot = selectedSlot, key = slot.dataset.slot, state = states[key];
+      numEdit.querySelector('[data-name]').textContent = numSlotName(slot) + ' 사진';
+      const same = numEdit.querySelector('[data-same]');
+      const pair = isCrossLayout() ? NUM_PAIR[key] : null;
+      same.hidden = !isCrossLayout();
+      same.disabled = !pair;
+      same.textContent = pair ? `맞은편과 같게 (${NUM_NAMES[pair]})` : '맞은편과 같게 (정면은 짝 없음)';
+      const size = frameSize(key);
+      const w = slot.clientWidth || 1, h = slot.clientHeight || 1;
+      const values = { fw: fmt1(size.w * 100), fh: fmt1(size.h * 100), zoom: String(Math.round(state.zoom)), rotate: fmt1(state.rotate), px: fmt1(state.x / w * 100), py: fmt1(state.y / h * 100) };
+      Object.keys(values).forEach(k => { const inp = numInput(k); if (document.activeElement !== inp) inp.value = values[k]; });
+      const hasPhoto = Boolean(state.src);
+      ['zoom', 'rotate', 'px', 'py'].forEach(k => { numInput(k).disabled = !hasPhoto; });
+    }
+
+    function applyNumInput(inp) {
+      if (!selectedSlot) return;
+      const slot = selectedSlot, key = slot.dataset.slot, state = states[key];
+      const v = parseFloat(String(inp.value).replace(',', '.'));
+      if (!Number.isFinite(v)) { refreshNumEdit(); return; }
+      const k = inp.dataset.k;
+      if (k === 'fw' || k === 'fh') {
+        const size = { ...frameSize(key) };
+        size[k === 'fw' ? 'w' : 'h'] = Math.min(1, Math.max(FRAME_MIN, v / 100));
+        setFrameSize(key, size);
+        layoutFrames();
+        saveFrameSizes();
+      } else {
+        if (!state.src) return;
+        pushHistory();
+        if (k === 'zoom') state.zoom = Math.min(300, Math.max(50, Math.round(v)));
+        if (k === 'rotate') state.rotate = Math.min(15, Math.max(-15, Math.round(v * 10) / 10));
+        if (k === 'px') state.x = v / 100 * slot.clientWidth;
+        if (k === 'py') state.y = v / 100 * slot.clientHeight;
+        renderSlot(slot);
+        syncControls();
+      }
+      refreshNumEdit();
+    }
+
+    numEdit.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('change', () => applyNumInput(inp));
+      inp.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { inp.blur(); return; }
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        // 위·아래 화살표: 한 칸씩 올리고 내리기 (Shift는 0.1씩, 확대는 1%씩)
+        event.preventDefault();
+        const dir = event.key === 'ArrowUp' ? 1 : -1;
+        const step = inp.dataset.k === 'zoom' ? 1 : inp.dataset.k === 'rotate' ? 0.1 : (event.shiftKey ? 0.1 : 1);
+        inp.value = fmt1((parseFloat(inp.value) || 0) + dir * step);
+        applyNumInput(inp);
+        inp.focus();
+      });
+    });
+
+    numEdit.querySelector('[data-same]').addEventListener('click', () => {
+      const key = selectedSlot && selectedSlot.dataset.slot, pair = NUM_PAIR[key];
+      if (!pair || !isCrossLayout()) return;
+      setFrameSize(key, { ...frameSize(pair) });
+      layoutFrames();
+      saveFrameSizes();
+      refreshNumEdit();
+      showToast(`${NUM_NAMES[pair]} 사진과 같은 크기로 맞췄습니다.`);
+    });
+
+    function placeNumEdit(x, y) {
+      const r = numEdit.getBoundingClientRect();
+      numEdit.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+      numEdit.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+    }
+    function openNumEdit(x, y) {
+      if (!selectedSlot || selectedSlot.hidden) { showToast('사진 칸을 먼저 선택하세요.'); return; }
+      closePopovers();
+      numEdit.classList.add('open');
+      numBtn.classList.add('active');
+      numBtn.setAttribute('aria-expanded', 'true');
+      refreshNumEdit();
+      if (x == null) {
+        // 단추로 열 때는 고친 결과가 가려지지 않게 선택한 사진 칸 옆(오른쪽, 자리가 없으면 왼쪽)에 연다
+        const s = selectedSlot.getBoundingClientRect(), w = numEdit.offsetWidth;
+        const inspector = document.querySelector('.inspector');
+        const limit = inspector ? inspector.getBoundingClientRect().left : innerWidth;
+        x = s.right + 12 + w <= limit ? s.right + 12 : s.left - 12 - w;
+        y = s.top;
+      }
+      placeNumEdit(x, y);
+    }
+    function closeNumEdit() {
+      if (!numEdit) return;
+      numEdit.classList.remove('open');
+      numBtn.classList.remove('active');
+      numBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    // 제목 줄을 끌면 창을 옮길 수 있다
+    let numMove = null;
+    const numTitle = numEdit.querySelector('h3');
+    numTitle.addEventListener('pointerdown', event => {
+      numMove = { dx: event.clientX - numEdit.offsetLeft, dy: event.clientY - numEdit.offsetTop };
+      numTitle.setPointerCapture(event.pointerId);
+    });
+    numTitle.addEventListener('pointermove', event => { if (numMove) placeNumEdit(event.clientX - numMove.dx, event.clientY - numMove.dy); });
+    numTitle.addEventListener('pointerup', () => { numMove = null; });
+
+    // 사진 우클릭으로 열기. 휴대폰·태블릿은 길게 누르기로 연다
+    let numOpenedAt = 0;
+    function openNumEditFromSlot(slot, x, y) {
+      if (Date.now() - numOpenedAt < 800) return;   // 길게 누르기 뒤에 따라오는 우클릭 신호는 무시
+      numOpenedAt = Date.now();
+      selectSlot(slot);
+      openNumEdit(x + 6, y + 6);
+    }
+    slots.forEach(slot => {
+      slot.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        openNumEditFromSlot(slot, event.clientX, event.clientY);
+      });
+      let press = null;
+      slot.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'touch' || event.target.closest('button')) return;
+        const x = event.clientX, y = event.clientY;
+        press = { x, y, timer: setTimeout(() => { press = null; openNumEditFromSlot(slot, x, y); }, 550) };
+      });
+      slot.addEventListener('pointermove', event => {
+        if (press && Math.abs(event.clientX - press.x) + Math.abs(event.clientY - press.y) > 8) { clearTimeout(press.timer); press = null; }
+      });
+      const cancel = () => { if (press) { clearTimeout(press.timer); press = null; } };
+      slot.addEventListener('pointerup', cancel);
+      slot.addEventListener('pointercancel', cancel);
+    });
+
+    // 바깥을 누르거나 Esc를 누르면 닫는다. 끌기·밀대 등으로 값이 바뀌면 창의 숫자도 따라간다
+    document.addEventListener('pointerdown', event => {
+      if (!numOpen() || event.button === 2) return;
+      if (numEdit.contains(event.target) || numBtn.contains(event.target)) return;
+      if (event.target.closest('.photo-slot, .resize-box, .inspector')) return;   // 사진을 고르거나 조정하는 동안은 열어 둔다
+      closeNumEdit();
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeNumEdit(); });
+    ['pointerup', 'input', 'keyup'].forEach(type => document.addEventListener(type, event => {
+      if (numOpen() && !numEdit.contains(event.target)) requestAnimationFrame(refreshNumEdit);
+    }));
 
     // 창 크기나 바깥 여백 설정이 바뀌면 다시 배치한다
     if (typeof ResizeObserver === 'function') new ResizeObserver(() => layoutFrames()).observe(sheetGrid);
