@@ -4402,6 +4402,17 @@
     const NUM_PAIR = { right: 'left', left: 'right', upper: 'lower', lower: 'upper' };
     const NUM_NAMES = { upper: '위 교합면', lower: '아래 교합면', front: '정면', right: '측면 (오른쪽)', left: '측면 (왼쪽)' };
     const numSlotName = slot => isCrossLayout() ? NUM_NAMES[slot.dataset.slot] : slotDisplayName(slot);
+    const numKeyName = key => isCrossLayout() ? NUM_NAMES[key] : slotDisplayName(crossSlotEl(key));
+    // 맞은편 짝: 십자는 좌우 측면·위아래 교합면, 가로 3장은 양옆(오른쪽·왼쪽) 사진. 그 밖의 배열은 짝이 없다
+    const numHasPairs = () => isCrossLayout() || currentLayout === 'horizontal3';
+    function numPairOf(key) {
+      if (isCrossLayout()) return NUM_PAIR[key] || null;
+      if (currentLayout !== 'horizontal3') return null;
+      const keys = visibleFrameKeys();
+      const i = keys.indexOf(key);
+      if (keys.length !== 3 || i === 1 || i < 0) return null;
+      return keys[2 - i];
+    }
     numEdit = document.createElement('div');
     numEdit.className = 'num-edit';
     numEdit.innerHTML = `
@@ -4434,10 +4445,10 @@
       const slot = selectedSlot, key = slot.dataset.slot, state = states[key];
       numEdit.querySelector('[data-name]').textContent = numSlotName(slot) + ' 사진';
       const same = numEdit.querySelector('[data-same]');
-      const pair = isCrossLayout() ? NUM_PAIR[key] : null;
-      same.hidden = !isCrossLayout();
+      const pair = numPairOf(key);
+      same.hidden = !numHasPairs();
       same.disabled = !pair;
-      same.textContent = pair ? `맞은편과 같게 (${NUM_NAMES[pair]})` : '맞은편과 같게 (정면은 짝 없음)';
+      same.textContent = pair ? `맞은편과 같게 (${numKeyName(pair)})` : '맞은편과 같게 (가운데 사진은 짝 없음)';
       const size = frameSize(key);
       const w = slot.clientWidth || 1, h = slot.clientHeight || 1;
       const values = { fw: fmt1(size.w * 100), fh: fmt1(size.h * 100), zoom: String(Math.round(state.zoom)), rotate: fmt1(state.rotate), px: fmt1(state.x / w * 100), py: fmt1(state.y / h * 100) };
@@ -4487,13 +4498,13 @@
     });
 
     numEdit.querySelector('[data-same]').addEventListener('click', () => {
-      const key = selectedSlot && selectedSlot.dataset.slot, pair = NUM_PAIR[key];
-      if (!pair || !isCrossLayout()) return;
+      const key = selectedSlot && selectedSlot.dataset.slot, pair = key && numPairOf(key);
+      if (!pair) return;
       setFrameSize(key, { ...frameSize(pair) });
       layoutFrames();
       saveFrameSizes();
       refreshNumEdit();
-      showToast(`${NUM_NAMES[pair]} 사진과 같은 크기로 맞췄습니다.`);
+      showToast(`${numKeyName(pair)} 사진과 같은 크기로 맞췄습니다.`);
     });
 
     function placeNumEdit(x, y) {
