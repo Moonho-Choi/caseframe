@@ -857,6 +857,12 @@
     }
     .num-edit.open { display: block; }
     .num-edit h3 { margin: -12px -12px 2px; padding: 12px 12px 0; font-size: 12px; cursor: move; user-select: none; touch-action: none; }
+    .num-edit .ne-close {
+      position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0;
+      border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+      font-size: 18px; line-height: 1; cursor: pointer;
+    }
+    .num-edit .ne-close:hover { background: var(--hover-bg); color: var(--text); }
     .num-edit .ne-sub { margin: 0 0 10px; color: var(--muted); font-size: 10.5px; }
     .num-edit .ne-sec { margin: 10px 0 5px; color: var(--muted); font-size: 10.5px; font-weight: 700; }
     .num-edit .ne-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
@@ -4390,6 +4396,7 @@
     numEdit.className = 'num-edit';
     numEdit.innerHTML = `
       <h3 title="끌어서 창 옮기기">숫자로 편집</h3>
+      <button class="ne-close" type="button" title="닫기 (Esc)" aria-label="닫기">×</button>
       <p class="ne-sub" data-name></p>
       <button class="ne-same" type="button" data-same>맞은편과 같게</button>
       <div class="ne-sec">칸 크기</div>
@@ -4507,6 +4514,8 @@
       numBtn.classList.remove('active');
       numBtn.setAttribute('aria-expanded', 'false');
     }
+
+    numEdit.querySelector('.ne-close').addEventListener('click', closeNumEdit);
 
     // 제목 줄을 끌면 창을 옮길 수 있다
     let numMove = null;
