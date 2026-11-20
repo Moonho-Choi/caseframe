@@ -4227,8 +4227,16 @@
     const MIRROR_PAIR = { right: 'left', left: 'right', upper: 'lower', lower: 'upper' };
     const SNAP_TOL = 0.015;   // 판 크기의 1.5% 이내로 가까워지면 같게 맞춘다
 
-    // 폭은 같은 세로줄 이웃과 맞은편 짝, 높이는 같은 가로줄 이웃과 맞은편 짝에 맞출 수 있다
+    // 십자 배치: 폭은 같은 세로줄 이웃과 맞은편 짝, 높이는 같은 가로줄 이웃과 맞은편 짝에 맞출 수 있다
     function snapTargets(activeKey) {
+      // 십자 외 배치(좌우·위아래·가로 3장·바둑판): 보이는 다른 사진 모두와 폭·높이를 맞출 수 있다
+      if (!isCrossLayout()) {
+        const others = visibleFrameKeys().filter(key => key !== activeKey);
+        return {
+          w: others.map(key => ({ key, v: frameSize(key).w })),
+          h: others.map(key => ({ key, v: frameSize(key).h }))
+        };
+      }
       const { row, col } = guideNeighbors(activeKey);
       const pair = isCrossLayout() ? MIRROR_PAIR[activeKey] : null;
       const wKeys = [...new Set([...col, ...(pair ? [pair] : [])])];
