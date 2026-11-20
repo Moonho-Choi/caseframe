@@ -877,10 +877,12 @@
     .num-edit input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
     .num-edit input:disabled { opacity: .45; }
     .num-edit .ne-same {
-      width: 100%; min-height: 32px; border: 0; border-radius: 8px; cursor: pointer;
-      background: var(--accent-2); color: #fff; font: inherit; font-size: 12px; font-weight: 700;
+      width: 100%; min-height: 32px; border: 1px solid rgba(116, 156, 255, .32); border-radius: 8px; cursor: pointer;
+      background: linear-gradient(180deg, rgba(116, 156, 255, .16), rgba(116, 156, 255, .05) 50%, rgba(116, 156, 255, .09));
+      color: var(--text); font: inherit; font-size: 12px; font-weight: 700;
     }
-    .num-edit .ne-same:disabled { background: var(--panel-2); color: var(--muted); cursor: default; }
+    .num-edit .ne-same:not(:disabled):hover { border-color: rgba(116, 156, 255, .55); background: linear-gradient(180deg, rgba(116, 156, 255, .22), rgba(116, 156, 255, .09) 50%, rgba(116, 156, 255, .13)); }
+    .num-edit .ne-same:disabled { border-color: var(--line); background: var(--panel-2); color: var(--muted); opacity: .6; cursor: default; }
     .num-edit .ne-same[hidden] { display: none; }
     .num-edit .ne-hint { margin: 10px 0 0; color: var(--muted); font-size: 10px; }
 
