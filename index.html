@@ -844,6 +844,10 @@
     .size-guides i { position: absolute; display: block; }
     .size-guides i.gv { width: 0; margin-left: -.75px; border-left: 1.5px dashed #ff3434; }
     .size-guides i.gh { height: 0; margin-top: -.75px; border-top: 1.5px dashed #ff3434; }
+    /* 자동 맞춤: 크기가 같아진 순간 선과 짝 사진 테두리를 민트로 (화면에만, 저장 이미지에는 없음) */
+    .size-guides.snapped-w i.gv { border-left-color: #00c2a8; border-left-style: solid; }
+    .size-guides.snapped-h i.gh { border-top-color: #00c2a8; border-top-style: solid; }
+    .snap-match { outline: 2px solid #00c2a8; outline-offset: 2px; }
     .sheet.generic-layout .photo-slot { grid-column: auto !important; grid-row: auto !important; }
     /* 사진 이름표(UPPER OCCLUSAL·BEFORE 등 알약 모양)는 쓰지 않는다 — 화면·저장 이미지 모두 숨김 (원장 결정 11-15) */
     .slot-label { display: none !important; }
@@ -4147,7 +4151,8 @@
       const handle = document.createElement('div');
       handle.className = 'rz';
       handle.dataset.dir = dir;
-      handle.title = dir.length === 2 ? '끌어서 이 사진 칸 크기 조절 (비율 유지) · 두 번 누르면 처음 크기로' : '끌어서 이 사진 칸 늘이기·줄이기 · 두 번 누르면 처음 크기로';
+      handle.title = (dir.length === 2 ? '끌어서 이 사진 칸 크기 조절 (비율 유지)' : '끌어서 이 사진 칸 늘이기·줄이기')
+        + ' · 맞은편·이웃 사진과 크기가 비슷해지면 저절로 같게 맞춤 (Alt를 누르고 끌면 맞춤 없이) · 두 번 누르면 처음 크기로';
       resizeBox.appendChild(handle);
     });
     sheetGrid.appendChild(resizeBox);
@@ -4175,6 +4180,31 @@
         row: keys.filter((k, j) => j !== i && Math.floor(j / cols) === Math.floor(i / cols)),
         col: keys.filter((k, j) => j !== i && j % cols === i % cols)
       };
+    }
+
+    // 자동 맞춤 짝: 십자 배치의 좌우 측면, 위아래 교합면은 서로 마주 보는 짝이다
+    const MIRROR_PAIR = { right: 'left', left: 'right', upper: 'lower', lower: 'upper' };
+    const SNAP_TOL = 0.015;   // 판 크기의 1.5% 이내로 가까워지면 같게 맞춘다
+
+    // 폭은 같은 세로줄 이웃과 맞은편 짝, 높이는 같은 가로줄 이웃과 맞은편 짝에 맞출 수 있다
+    function snapTargets(activeKey) {
+      const { row, col } = guideNeighbors(activeKey);
+      const pair = isCrossLayout() ? MIRROR_PAIR[activeKey] : null;
+      const wKeys = [...new Set([...col, ...(pair ? [pair] : [])])];
+      const hKeys = [...new Set([...row, ...(pair ? [pair] : [])])];
+      return {
+        w: wKeys.map(key => ({ key, v: frameSize(key).w })),
+        h: hKeys.map(key => ({ key, v: frameSize(key).h }))
+      };
+    }
+    const nearest = (list, v) => list.reduce((best, t) => {
+      const d = Math.abs(t.v - v);
+      return d <= SNAP_TOL && (!best || d < best.d) ? { ...t, d } : best;
+    }, null);
+
+    function clearSnapMarks() {
+      slots.forEach(slot => slot.classList.remove('snap-match'));
+      sizeGuides.classList.remove('snapped-w', 'snapped-h');
     }
 
     function updateSizeGuides(activeKey) {
@@ -4236,7 +4266,8 @@
           view: sheetGrid.getBoundingClientRect().width / sheetGrid.clientWidth,
           fit: frameFit,
           w: start.w,
-          h: start.h
+          h: start.h,
+          targets: snapTargets(key)
         };
         handle.setPointerCapture(event.pointerId);
         handle.classList.add('dragging');
@@ -4265,15 +4296,41 @@
           h = h0 * k;
         }
         const clamp = v => Math.min(1, Math.max(FRAME_MIN, v));
-        setFrameSize(key, { w: clamp(w / W), h: clamp(h / H) });
+        let fw = clamp(w / W);
+        let fh = clamp(h / H);
+
+        // 자동 맞춤: 이웃·맞은편 사진과 크기가 아주 비슷해지면 딱 같게 붙인다 (Alt를 누르면 끔)
+        const matched = [];   // [{ key, dim: 'w' | 'h' }]
+        if (!event.altKey) {
+          const { targets } = frameDrag;
+          const sw = hx ? nearest(targets.w, fw) : null;
+          const sh = vy ? nearest(targets.h, fh) : null;
+          if (hx && vy) {   // 모서리: 더 가까운 쪽 하나에 맞추고 나머지는 비율대로 따라간다
+            const pick = sw && (!sh || sw.d <= sh.d) ? 'w' : sh ? 'h' : null;
+            if (pick === 'w') { fh = clamp(fh * sw.v / fw); fw = sw.v; matched.push({ key: sw.key, dim: 'w' }); }
+            if (pick === 'h') { fw = clamp(fw * sh.v / fh); fh = sh.v; matched.push({ key: sh.key, dim: 'h' }); }
+          } else {
+            if (sw) { fw = sw.v; matched.push({ key: sw.key, dim: 'w' }); }
+            if (sh) { fh = sh.v; matched.push({ key: sh.key, dim: 'h' }); }
+          }
+        }
+
+        setFrameSize(key, { w: fw, h: fh });
         layoutFrames();
         updateSizeGuides(key);   // 전체가 다시 가운데 맞춤되며 다른 칸도 움직일 수 있어 매번 다시 그린다
+        clearSnapMarks();
+        matched.forEach(m => {
+          sizeGuides.classList.add('snapped-' + m.dim);
+          const el = crossSlotEl(m.key);
+          if (el) el.classList.add('snap-match');
+        });
       });
       const endDrag = () => {
         if (!frameDrag) return;
         frameDrag = null;
         handle.classList.remove('dragging');
         sizeGuides.classList.remove('on');
+        clearSnapMarks();
         saveFrameSizes();
       };
       handle.addEventListener('pointerup', endDrag);
