@@ -1,7 +1,7 @@
 {
- "version": "2026.11.25.5",
- "file": "DMW-update-2026.11.25.5.dmwup",
- "notes": "오류가 나면 어느 부분에서 났는지를 만든 사람에게 자동으로 알립니다. 환자 이름·연락처·진료 내용은 보내지 않습니다. 환경설정의 프로그램 칸에서 끌 수 있습니다.",
+ "version": "2026.11.25.6",
+ "file": "DMW-update-2026.11.25.6.dmwup",
+ "notes": "점검, 덴트웹 엑셀 받기 시험, 매일 아침 자동으로 받기, 원내 접속 열기, 앞 판으로 되돌리기를 환경설정 화면의 단추로 옮겼습니다.\n새로 설치할 때는 DMW 설치 하나만 누르면 됩니다.",
  "built": "2026-11-25",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.5/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.6/DMW-setup.zip"
 }
