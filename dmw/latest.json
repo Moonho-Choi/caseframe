@@ -1,7 +1,7 @@
 {
- "version": "2026.11.25.8",
- "file": "DMW-update-2026.11.25.8.dmwup",
- "notes": "새 메뉴 '환자'(연령별·지역별·내원경로 그래프와 기간별 추이), 덴트웹 통계 화면 정리(그래프, 일일·월간·연간 장부, 접수환자 수·예약 이행 그래프)",
+ "version": "2026.11.25.9",
+ "file": "DMW-update-2026.11.25.9.dmwup",
+ "notes": "접수환자 수의 요일별·시간대별 평균을 세로 막대로",
  "built": "2026-11-25",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.8/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.9/DMW-setup.zip"
 }
