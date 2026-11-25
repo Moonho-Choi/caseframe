@@ -1,7 +1,7 @@
 {
- "version": "2026.11.25.3",
- "file": "DMW-update-2026.11.25.3.dmwup",
- "notes": "브라우저 탭에 DMW 그림(파비콘)이 나옵니다.",
+ "version": "2026.11.25.4",
+ "file": "DMW-update-2026.11.25.4.dmwup",
+ "notes": "덴트웹 통계표 받기를 다른 PC에서도 잘 되게 고쳤습니다: 메뉴를 연 뒤 화면 제목으로 한 번 더 확인하고, 덴트웹 창의 위치나 화면 배율이 달라도 단추를 찾습니다.\n환경설정에 덴트웹 아이콘 다시 찍기가 생겼습니다(아이콘을 못 찾는 PC에서 사진을 눌러 기준 그림을 다시 만듭니다).",
  "built": "2026-11-25",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.3/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.4/DMW-setup.zip"
 }
