@@ -4,7 +4,12 @@
 //
 // 비밀번호는 지나가는 사람이 누르지 않게 하는 문패 정도다. 공개 홈페이지라 진짜 잠금은 아니다
 // (설치 파일의 주소를 아는 사람은 받을 수 있다). 설치 파일에는 환자 자료나 계정이 들어 있지 않다.
+//
+// 비밀번호 다음에 치과 이름과 원장 이름을 묻고, 다운로드를 누르면 그 둘과 판 번호를 원장님의 받는 통
+// (DMW 오류 보고와 같은 구글 설문지, 종류 "다운로드")에 한 줄 남긴다. 누가 몇 번 받았는지 보려는 것이다(원장님 요청 2026-11-25).
 (function () {
+  var LOG_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeU43vQoLXAuu3bw4CyYocxks4t02Fg_wPAXp-IgWzT7DOKOg/formResponse';
+  var LOG_ENTRY = 'entry.564898876';
   var HASH = 'd1174443fa904a38ede6207da4dfe9e5402789ba7dbc64a6a1632badcb7088c2';   // 비밀번호 대조값(비밀번호 자체는 적지 않는다)
   var panel = document.querySelector('.start-panel');
   if (!panel || document.getElementById('dmwInstallBtn')) return;
@@ -25,6 +30,7 @@
     '#dmwGate p{margin:0 0 14px;color:#5B6675;font-size:13px;line-height:1.5}' +
     '#dmwGate input{width:100%;box-sizing:border-box;height:44px;padding:0 12px;border:1px solid #D9DEE5;border-radius:9px;font:inherit;font-size:16px}' +
     '#dmwGate input:focus{outline:2px solid #2a78d6;outline-offset:1px}' +
+    '#dmwGate .who input+input{margin-top:8px}' +
     '#dmwGate .msg{min-height:20px;margin:8px 0 10px;color:#A32B2B;font-size:13px}' +
     '#dmwGate .row{display:flex;gap:8px}' +
     '#dmwGate button{flex:1;height:42px;border-radius:9px;border:1px solid #D9DEE5;background:#fff;color:#1B2430;font:inherit;font-weight:600;cursor:pointer}' +
@@ -53,19 +59,57 @@
     '<input type="password" inputmode="numeric" aria-label="비밀번호" placeholder="비밀번호">' +
     '<div class="msg" role="status"></div>' +
     '<div class="row"><button type="button" class="no">닫기</button><button type="submit" class="go">확인</button></div></form>' +
+    '<form class="who" autocomplete="off" hidden><h3>DMW 설치 파일</h3>' +
+    '<p>받는 분을 적어 주세요. 문제가 생겼을 때 어느 치과인지 알기 위한 것입니다.</p>' +
+    '<input type="text" class="clinic" maxlength="40" aria-label="치과 이름" placeholder="치과 이름">' +
+    '<input type="text" class="doctor" maxlength="20" aria-label="원장 이름" placeholder="원장 이름">' +
+    '<div class="msg" role="status"></div>' +
+    '<div class="row"><button type="button" class="no">닫기</button><button type="submit" class="go">다음</button></div></form>' +
     '<div class="ask" hidden><h3>DMW 설치 파일</h3><p class="what"></p>' +
     '<div class="row"><button type="button" class="no">취소</button><button type="button" class="go yes">다운로드</button></div></div>';
   document.body.appendChild(gate);
-  var form = gate.querySelector('form'), input = gate.querySelector('input'), msg = gate.querySelector('.msg');
+  var form = gate.querySelector('form'), input = gate.querySelector('input'), msg = gate.querySelector('.msg');   // 맨 앞의 것 = 비밀번호 창
   var ask = gate.querySelector('.ask'), what = gate.querySelector('.what'), yes = gate.querySelector('.yes');
+  var who = gate.querySelector('.who'), clinic = gate.querySelector('.clinic'), doctor = gate.querySelector('.doctor');
+  var whoMsg = who.querySelector('.msg');
   var found = null;                                   // 비밀번호가 맞은 뒤 받아 둔 새 판 안내
 
-  function show(step) { form.hidden = step !== 'pw'; ask.hidden = step !== 'ask'; }
+  function show(step) { form.hidden = step !== 'pw'; who.hidden = step !== 'who'; ask.hidden = step !== 'ask'; }
+  function recall(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+  function keep(key, value) { try { localStorage.setItem(key, value); } catch (e) { } }
+  // 받는 통에 한 줄 남긴다. 오류 보고와 같은 모양이라 같은 시트에 쌓인다. 실패해도 다운로드는 그대로 한다.
+  function record(version) {
+    var d = new Date(), two = function (n) { return ('0' + n).slice(-2); };
+    var body = '병원: ' + clinic.value.trim() + '\n원장: ' + doctor.value.trim() + '\n판: ' + version + '\n종류: 다운로드\n시각: ' +
+      d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes());
+    try {
+      var data = new URLSearchParams(); data.append(LOG_ENTRY, body);
+      return (window.__dmwLog || function (u, b) { return fetch(u, { method: 'POST', mode: 'no-cors', keepalive: true, body: b }); })(LOG_URL, data)
+        .catch(function () { });
+    } catch (e) { return Promise.resolve(); }
+  }
   function open() {
     found = null; msg.textContent = ''; msg.style.color = ''; input.value = ''; show('pw');
     gate.classList.add('open'); setTimeout(function () { input.focus(); }, 30);
   }
   function close() { gate.classList.remove('open'); input.value = ''; found = null; }
+  function confirmStep() {
+    what.textContent = 'DMW 설치 파일(판 ' + found.version + ')을 다운로드할까요? 받은 뒤 압축을 풀고 "설치-안내.txt"를 따라 주세요.';
+    show('ask');
+    setTimeout(function () { yes.focus(); }, 30);
+  }
+  who.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!found) return;
+    if (!clinic.value.trim() || !doctor.value.trim()) {
+      whoMsg.textContent = '치과 이름과 원장 이름을 모두 넣어 주세요.';
+      (clinic.value.trim() ? doctor : clinic).focus();
+      return;
+    }
+    whoMsg.textContent = '';
+    keep('dmwClinic', clinic.value.trim()); keep('dmwDoctor', doctor.value.trim());
+    confirmStep();
+  });
 
   btn.addEventListener('click', function (ev) { ev.stopPropagation(); open(); });
   gate.addEventListener('click', function (ev) { if (ev.target === gate) close(); });
@@ -73,9 +117,11 @@
   // 한 번 더 묻는다: 다운로드를 누르면 받기를 시작하고 창을 닫는다(원장님 요청 2026-11-25).
   yes.addEventListener('click', function () {
     if (!found) return;
-    var url = found.install;
+    var url = found.install, done = false;
+    var go = function () { if (done) return; done = true; (window.__dmwGo || function (u) { window.location.href = u; })(url); };
+    record(found.version).then(go);                   // 기록이 나간 뒤에 받기 시작(늦어도 1.5초 뒤에는 시작)
+    setTimeout(go, 1500);
     close();
-    (window.__dmwGo || function (u) { window.location.href = u; })(url);
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && gate.classList.contains('open')) { ev.stopPropagation(); close(); }
@@ -98,9 +144,9 @@
       if (!latest) return;
       if (!latest.install) throw new Error('no install');
       found = latest;
-      what.textContent = 'DMW 설치 파일(판 ' + latest.version + ')을 다운로드할까요? 받은 뒤 압축을 풀고 "설치-안내.txt"를 따라 주세요.';
-      show('ask');
-      setTimeout(function () { yes.focus(); }, 30);
+      clinic.value = recall('dmwClinic'); doctor.value = recall('dmwDoctor'); whoMsg.textContent = '';
+      show('who');
+      setTimeout(function () { (clinic.value ? doctor : clinic).focus(); }, 30);
     }).catch(function () {
       msg.style.color = '';
       msg.textContent = '지금은 받을 수 없습니다. 잠시 뒤에 다시 해 주세요.';
