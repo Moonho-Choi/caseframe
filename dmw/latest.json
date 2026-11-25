@@ -1,0 +1,7 @@
+{
+ "version": "2026.11.25.2",
+ "file": "DMW-update-2026.11.25.2.dmwup",
+ "notes": "환경설정에서 새 판을 확인하고 업데이트할 수 있게 됐습니다.\n임플란트 리콜(연락 화면)과 임플란트 정기검진 표시(오늘 화면)가 생겼습니다.\n전국 비교에서 우리 병원 지역을 고를 수 있습니다.",
+ "built": "2026-11-25",
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.2/DMW-setup.zip"
+}
