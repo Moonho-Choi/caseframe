@@ -1,7 +1,7 @@
 {
- "version": "2026.11.25.7",
- "file": "DMW-update-2026.11.25.7.dmwup",
- "notes": "오늘 화면에 수납 칸과 예약 없이 수납한 환자, 급여·비급여 그래프 총액과 상자, 설치할 때 치과·원장 이름 넣기(오류 보고에 함께 전달)",
+ "version": "2026.11.25.8",
+ "file": "DMW-update-2026.11.25.8.dmwup",
+ "notes": "새 메뉴 '환자'(연령별·지역별·내원경로 그래프와 기간별 추이), 덴트웹 통계 화면 정리(그래프, 일일·월간·연간 장부, 접수환자 수·예약 이행 그래프)",
  "built": "2026-11-25",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.7/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.8/DMW-setup.zip"
 }
