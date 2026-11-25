@@ -10,7 +10,7 @@
 (function () {
   var LOG_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeU43vQoLXAuu3bw4CyYocxks4t02Fg_wPAXp-IgWzT7DOKOg/formResponse';
   var LOG_ENTRY = 'entry.564898876';
-  var HASH = 'd1174443fa904a38ede6207da4dfe9e5402789ba7dbc64a6a1632badcb7088c2';   // 비밀번호 대조값(비밀번호 자체는 적지 않는다)
+  var HASH = 'cc4da9fc4a42978a0936bdf5f0e72fdb59024397e346d57a196e1678499ba951';   // 비밀번호 대조값(비밀번호 자체는 적지 않는다)
   var panel = document.querySelector('.start-panel');
   if (!panel || document.getElementById('dmwInstallBtn')) return;
 
@@ -56,7 +56,7 @@
   gate.innerHTML =
     '<form autocomplete="off"><h3>DMW 설치 파일</h3>' +
     '<p>덴트웹을 쓰는 치과용 경영 화면 프로그램입니다. 받은 비밀번호를 넣어 주세요.</p>' +
-    '<input type="password" inputmode="numeric" aria-label="비밀번호" placeholder="비밀번호">' +
+    '<input type="password" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="비밀번호" placeholder="비밀번호">' +
     '<div class="msg" role="status"></div>' +
     '<div class="row"><button type="button" class="no">닫기</button><button type="submit" class="go">확인</button></div></form>' +
     '<form class="who" autocomplete="off" hidden><h3>DMW 설치 파일</h3>' +
