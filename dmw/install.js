@@ -18,7 +18,8 @@
     '#dmwInstallBtn svg{width:26px;height:26px;flex:none}' +
     '#dmwGate{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:20px;background:rgba(10,20,25,.45)}' +
     '#dmwGate.open{display:grid}' +
-    '#dmwGate form{width:100%;max-width:300px;padding:22px 20px 18px;border-radius:16px;background:#fff;color:#1B2430;' +
+    '#dmwGate [hidden]{display:none}' +
+    '#dmwGate form,#dmwGate .ask{width:100%;max-width:300px;padding:22px 20px 18px;border-radius:16px;background:#fff;color:#1B2430;' +
     'box-shadow:0 18px 50px rgba(0,0,0,.28);font-size:14px}' +
     '#dmwGate h3{margin:0 0 4px;font-size:17px}' +
     '#dmwGate p{margin:0 0 14px;color:#5B6675;font-size:13px;line-height:1.5}' +
@@ -51,16 +52,31 @@
     '<p>덴트웹을 쓰는 치과용 경영 화면 프로그램입니다. 받은 비밀번호를 넣어 주세요.</p>' +
     '<input type="password" inputmode="numeric" aria-label="비밀번호" placeholder="비밀번호">' +
     '<div class="msg" role="status"></div>' +
-    '<div class="row"><button type="button" class="no">닫기</button><button type="submit" class="go">받기</button></div></form>';
+    '<div class="row"><button type="button" class="no">닫기</button><button type="submit" class="go">확인</button></div></form>' +
+    '<div class="ask" hidden><h3>DMW 설치 파일</h3><p class="what"></p>' +
+    '<div class="row"><button type="button" class="no">취소</button><button type="button" class="go yes">다운로드</button></div></div>';
   document.body.appendChild(gate);
   var form = gate.querySelector('form'), input = gate.querySelector('input'), msg = gate.querySelector('.msg');
+  var ask = gate.querySelector('.ask'), what = gate.querySelector('.what'), yes = gate.querySelector('.yes');
+  var found = null;                                   // 비밀번호가 맞은 뒤 받아 둔 새 판 안내
 
-  function open() { msg.textContent = ''; input.value = ''; gate.classList.add('open'); setTimeout(function () { input.focus(); }, 30); }
-  function close() { gate.classList.remove('open'); }
+  function show(step) { form.hidden = step !== 'pw'; ask.hidden = step !== 'ask'; }
+  function open() {
+    found = null; msg.textContent = ''; msg.style.color = ''; input.value = ''; show('pw');
+    gate.classList.add('open'); setTimeout(function () { input.focus(); }, 30);
+  }
+  function close() { gate.classList.remove('open'); input.value = ''; found = null; }
 
   btn.addEventListener('click', function (ev) { ev.stopPropagation(); open(); });
   gate.addEventListener('click', function (ev) { if (ev.target === gate) close(); });
-  gate.querySelector('.no').addEventListener('click', close);
+  Array.prototype.forEach.call(gate.querySelectorAll('.no'), function (b) { b.addEventListener('click', close); });
+  // 한 번 더 묻는다: 다운로드를 누르면 받기를 시작하고 창을 닫는다(원장님 요청 2026-11-25).
+  yes.addEventListener('click', function () {
+    if (!found) return;
+    var url = found.install;
+    close();
+    (window.__dmwGo || function (u) { window.location.href = u; })(url);
+  });
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && gate.classList.contains('open')) { ev.stopPropagation(); close(); }
   }, true);
@@ -76,14 +92,15 @@
     msg.style.color = '';
     sha256('dmw-install:' + input.value.trim()).then(function (h) {
       if (h !== HASH) { msg.textContent = '비밀번호가 맞지 않습니다.'; input.select(); return null; }
-      msg.style.color = '#17602C';
-      msg.textContent = '설치 파일을 받는 중입니다…';
+      msg.textContent = '';
       return fetch('/dmw/latest.json', { cache: 'no-store' }).then(function (r) { return r.json(); });
     }).then(function (latest) {
       if (!latest) return;
       if (!latest.install) throw new Error('no install');
-      (window.__dmwGo || function (u) { window.location.href = u; })(latest.install);
-      msg.textContent = '받기를 시작했습니다. 압축을 풀고 "설치-안내.txt"를 따라 주세요. (판 ' + latest.version + ')';
+      found = latest;
+      what.textContent = 'DMW 설치 파일(판 ' + latest.version + ')을 다운로드할까요? 받은 뒤 압축을 풀고 "설치-안내.txt"를 따라 주세요.';
+      show('ask');
+      setTimeout(function () { yes.focus(); }, 30);
     }).catch(function () {
       msg.style.color = '';
       msg.textContent = '지금은 받을 수 없습니다. 잠시 뒤에 다시 해 주세요.';
