@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.4",
- "file": "DMW-update-2026.11.27.4.dmwup",
- "notes": "새 메뉴 '체크'(오래 기다린 환자·미수금이 큰 환자·꾸준히 오는 환자), 통계표를 받는 주기 고르기(매일·매주·버튼으로만)",
+ "version": "2026.11.27.5",
+ "file": "DMW-update-2026.11.27.5.dmwup",
+ "notes": "체크 화면에 '치료비 많이 낸 환자' 항목을 더하고, 해를 골라 볼 수 있습니다",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.4/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.5/DMW-setup.zip"
 }
