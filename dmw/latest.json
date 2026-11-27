@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.8",
- "file": "DMW-update-2026.11.27.8.dmwup",
- "notes": "사용 기간 표시(시험 사용 석 달), 오늘 화면에 올해 스케일링 여부, 사용법 안내서를 프로그램에 넣음(환경설정 > 프로그램 > 사용법 열기)",
+ "version": "2026.11.27.9",
+ "file": "DMW-update-2026.11.27.9.dmwup",
+ "notes": "버튼(연도·월·항목·탭, 완료·부재)을 눌러도 화면이 맨 위로 튀지 않고, 누른 버튼이 있던 자리에 그대로 머뭅니다.",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.8/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.9/DMW-setup.zip"
 }
