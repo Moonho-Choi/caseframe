@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.10",
- "file": "DMW-update-2026.11.27.10.dmwup",
- "notes": "오늘 화면에서 올해 스케일링을 안 받은 환자가 최근 6개월 안에 치주처치를 받았으면 '치주처치 며칠 전'이 함께 나옵니다. 예약 환자 제목 오른쪽의 작은 스위치로 알림(스케일링·보험 확인·T-BITE·임플란트·체크)을 종류별로 켜고 끌 수 있습니다.",
+ "version": "2026.11.27.11",
+ "file": "DMW-update-2026.11.27.11.dmwup",
+ "notes": "덴트웹 통계 화면과 환자 화면에 표마다 기간이 나옵니다(예: 기간 2026년 11월 1일 ~ 27일 09:22). 덴트웹 화면이 열릴 때의 기본 기간부터 통계표를 받은 때까지입니다.",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.10/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.11/DMW-setup.zip"
 }
