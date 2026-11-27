@@ -10,7 +10,7 @@
 (function () {
   var LOG_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeU43vQoLXAuu3bw4CyYocxks4t02Fg_wPAXp-IgWzT7DOKOg/formResponse';
   var LOG_ENTRY = 'entry.564898876';
-  var HASH = 'cc4da9fc4a42978a0936bdf5f0e72fdb59024397e346d57a196e1678499ba951';   // 비밀번호 대조값(비밀번호 자체는 적지 않는다)
+  var HASH = 'cfa97f332030d443bb9f10bfc33c82abbd5677baf2c4b44ebac0e1f15e21e533';   // 비밀번호 대조값(비밀번호 자체는 적지 않는다)
   var panel = document.querySelector('.start-panel');
   if (!panel || document.getElementById('dmwInstallBtn')) return;
 
