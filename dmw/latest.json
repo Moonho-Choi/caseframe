@@ -1,7 +1,7 @@
 {
- "version": "2026.11.25.9",
- "file": "DMW-update-2026.11.25.9.dmwup",
- "notes": "접수환자 수의 요일별·시간대별 평균을 세로 막대로",
- "built": "2026-11-25",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.25.9/DMW-setup.zip"
+ "version": "2026.11.27.1",
+ "file": "DMW-update-2026.11.27.1.dmwup",
+ "notes": "오늘 화면: 접수한 환자가 대기 중·진료 중·수납 대기·이행 가운데 어느 단계인지 보이고, 30초마다 저절로 새로 고쳐집니다",
+ "built": "2026-11-27",
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.1/DMW-setup.zip"
 }
