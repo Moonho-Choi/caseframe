@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.3",
- "file": "DMW-update-2026.11.27.3.dmwup",
- "notes": "덴트웹 통계표 받기가 끝나면 덴트웹을 데스크 화면으로 돌려놓고, 끝났다는 안내 창을 띄웁니다",
+ "version": "2026.11.27.4",
+ "file": "DMW-update-2026.11.27.4.dmwup",
+ "notes": "새 메뉴 '체크'(오래 기다린 환자·미수금이 큰 환자·꾸준히 오는 환자), 통계표를 받는 주기 고르기(매일·매주·버튼으로만)",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.3/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.4/DMW-setup.zip"
 }
