@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.2",
- "file": "DMW-update-2026.11.27.2.dmwup",
- "notes": "오늘 화면: 예약 없이 접수한 환자도 접수 때부터 목록 아래에 보입니다",
+ "version": "2026.11.27.3",
+ "file": "DMW-update-2026.11.27.3.dmwup",
+ "notes": "덴트웹 통계표 받기가 끝나면 덴트웹을 데스크 화면으로 돌려놓고, 끝났다는 안내 창을 띄웁니다",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.2/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.3/DMW-setup.zip"
 }
