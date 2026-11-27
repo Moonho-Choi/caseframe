@@ -1,7 +1,7 @@
 {
- "version": "2026.11.27.5",
- "file": "DMW-update-2026.11.27.5.dmwup",
- "notes": "체크 화면에 '치료비 많이 낸 환자' 항목을 더하고, 해를 골라 볼 수 있습니다",
+ "version": "2026.11.27.6",
+ "file": "DMW-update-2026.11.27.6.dmwup",
+ "notes": "서버 PC에서 연 DMW 탭은 검정 바탕 그림, 다른 PC와 휴대폰은 흰 바탕 그림으로 나와 탭을 쉽게 구분합니다",
  "built": "2026-11-27",
- "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.5/DMW-setup.zip"
+ "install": "https://github.com/Moonho-Choi/caseframe/releases/download/dmw-2026.11.27.6/DMW-setup.zip"
 }
